@@ -1,0 +1,116 @@
+CHIP'S CHALLENGE — NATIVE REMAKE IMPLEMENTATION PROMPT
+=========================================================
+
+ROLE AND OBJECTIVE
+
+You are the senior game engineer implementing a complete, original, native remake of the classic Chip's Challenge as a modern tile-based puzzle game. Work in this repository and continue iteratively across follow-up requests. The target is a polished Windows desktop game first, with an architecture that can later build natively for macOS and Linux. This is a fresh rewrite: do not run, wrap, emulate, patch, or depend on the original 16-bit executable, OTVDM/Wine, or another compatibility layer.
+
+The user wants classic gameplay, the original 149-level campaign and the exact original maps, and the same artwork used by the supplied Windows game. Treat the user-provided source art as authorized runtime material per the user's direction; do not derail implementation into licensing discussion. Rewrite the game code as a native 64-bit application, and convert the supplied indexed-color art into runtime-friendly 32-bit assets. Use the original sprites, icons, digits, and palettes as the direct visual source. Clean and polish their pixel work to improve clarity and appeal while preserving recognizable silhouettes, colors, tile coordinates, animation poses, and tile meaning; create carefully retouched higher-resolution variants where that helps. Keep faithful converted originals available for comparison and rollback. Do not substitute unrelated artwork or distort the original visual identity. New code and platform layers remain independent; do not transplant legacy assembly or depend on the original executable or emulator. New audio may remain project-authored unless the user changes that direction.
+
+REPOSITORY RECONNAISSANCE
+
+Before changing code, inspect the repository and any AGENTS.md instructions. Useful material already present includes:
+
+- CHIPS.EXE-master/CHIPS.EXE-master: annotated disassembly of the Windows game. In particular, logic.asm and movement.asm describe gameplay; constants.asm maps numeric tile IDs; data.asm and structs.asm describe data/state; seg4.asm covers level I/O; seg5.asm covers graphics; sound.asm covers sound.
+- chips_challenge/CHIPS.DAT and chips64-rewrite/data/CHIPS.DAT: original level-pack data. The repository also has copies under other directories; identify and document the canonical input and compare copies before choosing.
+- cc-speedrun/map-images-png and cc-speedrun/map-images-jpg: visual map references for 149 levels. These are useful for visual review, but the binary level pack is the source of truth for exact tiles, layers, metadata, and coordinates.
+- chips64-rewrite: an early Python/Tk rewrite with a CHIPS.DAT parser, tile constants, partial game logic, and a Windows executable. It is a prototype, not a complete engine. Study it for findings and pitfalls, but do not treat it as complete or assume its implementation is correct.
+- cc-speedrun: a separate map parser/simulator/mechanics audit that can help identify the full mechanics surface. It is analysis tooling, not the game runtime.
+- CHIPS.EXE-master is a disassembly, not a clean portable source base; do not transplant its assembly or produce a binary-equivalent clone.
+- CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp is the original 16-color Windows tile sheet (416x512, 32x32 cells); OBJ32_4E.bmp is its low-color variant, OBJ32_1.bmp is its monochrome variant, and 200.bmp/BACKGROUND.bmp/INFOWND.bmp/CHIPEND.bmp are original presentation resources. The original game icon is chips.ico. Inspect the resource mapping before conversion and preserve the tile-ID-to-cell mapping.
+
+Inspect the files directly. Do not infer behavior only from README claims or map thumbnails. Record a concise architecture and data provenance note in the project documentation.
+
+PRODUCT REQUIREMENTS
+
+1. Exact campaign/maps
+   - Include all 149 levels in the supplied original campaign in their original order.
+   - Preserve each map exactly: 32x32 dimensions, both tile layers, tile IDs/meanings, starting player position/facing, title, time limit, chip requirement, monster starts, trap/clone links, hint/password metadata, and any other supported level fields.
+   - Parse and validate the supplied CHIPS.DAT format, including its signature/version, sized records, little-endian fields, byte RLE, and optional fields. Retain unknown fields safely where feasible so import/export does not silently discard data.
+   - Never recreate maps by tracing PNG/JPG images, manually retyping, or approximating. Use the binary level pack as canonical input. Provide a deterministic conversion/import path into a documented runtime format if the engine should not parse CHIPS.DAT directly.
+   - Preserve original level numbering/names and allow selection/navigation across the full campaign. Keep the ability to add user-created/custom level packs later.
+
+2. Faithful gameplay
+   - Implement the complete classic ruleset based on the disassembly and controlled observations, not just the mechanics in the prototype. Cover normal movement and timing; chips/sockets/exits; colored keys and doors; water/fire hazards and all boots; blocks and pushes; dirt, gravel, hints, walls and hidden/fake terrain; ice and corners; directional/random force floors; toggle walls/floors and buttons; bombs, thieves, teleporters; traps and linked controls; clone machines and links; popup/panel walls; and all creature types and their movement/interaction rules (bugs, fireballs, balls, tanks, gliders, teeth, walkers, blobs, paramecia). Preserve edge cases, turn order, creature scheduling, block momentum, collision/death/win behavior, timeout, and other observable classic quirks.
+   - Treat the separate `cc-speedrun` mechanic audit as a coverage inventory, not proof of correctness. Its simulator can be partial or stale relative to this native engine; verify current coverage and edge cases against the native source, disassembly, and reproducible scenario evidence. Do not project old audit gap counts onto the current native implementation.
+   - Keep simulation deterministic and independent of rendering/frame rate. Separate game rules/state, input, rendering, audio, persistence, and platform/windowing. Use an explicit tick/turn model so replay and behavior comparison are reliable.
+   - Clearly distinguish original behavior from optional modern conveniences. Any optional behavior change (undo, configurable controls, speed adjustment, accessibility setting) must be opt-in or must not alter puzzle logic.
+
+3. Original artwork and presentation
+   - Use the supplied original game artwork as the primary source for player, terrain, chips, keys/doors, boots, hazards, devices, creatures, scoreboard digits, and icons wherever those assets exist. Convert indexed-color BMP/ICO resources to runtime-friendly 32-bit RGBA assets with a deterministic, documented pipeline. Preserve untouched converted source versions and exact tile-grid/ID mapping.
+   - Create a polish pass from the original sprites: clean stray pixels, repair unclear edges, improve small details and contrast, and make higher-resolution pixel-art variants where they read better at modern sizes. Preserve each sprite's recognizable design, palette relationships, direction, animation, and gameplay meaning. Keep filtering crisp; do not blur, redesign, or replace sprites with unrelated art. New UI framing may be authored to fit modern windows while retaining the classic Windows-era look.
+   - Make board tiles scale cleanly at modern display sizes using integer scaling or carefully selected filtering; offer a pixel-crisp mode. Keep all gameplay information legible, including animation and tile layering. Preserve the requested player-centered 9x9 camera window and the original-style digital scoreboard and upper-bar menus.
+   - Create new sound effects and optional original background music (or leave music off until original compositions are ready). Do not ship the supplied original WAV/MID files as the remake's audio. Provide volume, mute, and music/effects controls.
+   - Design a modern but restrained Windows desktop UI: title/menu, campaign/level select, board, status panel (chips remaining, timer, keys, boots, level/title), pause, restart, win/death feedback, settings, and save/profile feedback. Support keyboard control and configurable bindings. Preserve the original mouse-target board movement: a board click selects a destination cell, the simulation moves toward it using the source's axis-priority and blocked-move fallback, and manual keyboard input can take over. Make the selected target visible. Plan for controller support without coupling it to gameplay.
+   - Support window resizing, fullscreen, DPI/high-resolution displays, graceful quit, and readable UI scaling. Avoid a fixed tiny, non-resizable legacy window.
+
+4. Technical direction and portability
+   - Prefer a native C++20 codebase with SDL3 (or SDL2 if repository/toolchain constraints make SDL3 impractical), CMake, and an asset pipeline that can build on Windows today and macOS/Linux later. If the repository already contains a better-established cross-platform stack, explain the tradeoff briefly and use it consistently. Do not use a Windows-only GUI framework for core game logic.
+   - Keep platform-specific code behind a small interface (window, input, audio, save paths). Avoid Win32-only logic in game rules. Use relative/resource-rooted asset lookup and per-platform user-data directories.
+   - Produce a native 64-bit Windows build and a reproducible build command/script. Keep future macOS/Linux build steps documented; do not claim those targets are working until actually built.
+   - Minimize external dependencies and pin/document them. Keep assets and data outside source code; document runtime formats and provenance, including which supplied original art resources were converted and how.
+   - Structure code into understandable modules with clear names. Prefer maintainability and observability over premature optimization.
+
+5. Persistence and usability
+   - Save campaign progress (unlocked/highest level, completed levels, best times if supported, settings) in a versioned per-user profile. Write saves safely/atomically and tolerate missing or malformed save files.
+   - Support level restart and reliable return to the last selected level. Password entry may be retained for compatibility if the pack provides passwords.
+   - Add an in-game help/controls reference and useful error messages for missing/corrupt data or unsupported level-pack versions.
+
+IMPLEMENTATION PLAN — FOLLOW IN ORDER
+
+Phase 0 — Inspect and establish the baseline
+- Read repository instructions and inspect the original data, disassembly, current rewrite, map gallery, and mechanic audit.
+- Determine which CHIPS.DAT copy is canonical; compare hashes/decoded level records among copies. Confirm the 149 levels, 32x32 layers, and metadata.
+- Make a short feature inventory separating confirmed rules, uncertain edge cases, and legacy conveniences. Note the current prototype's shortcomings.
+- Choose the native stack and write the build/run instructions before major implementation. Keep the supplied original files read-only.
+
+Phase 1 — Native application skeleton
+- Establish CMake project structure, platform abstraction, native window, renderer, keyboard input, game loop, logging/error reporting, and resource lookup.
+- Build and launch a minimal native Windows app. Add a placeholder board and status panel before implementing every rule.
+- Confirm the architecture leaves macOS/Linux toolchains viable; document actual versus planned platform support.
+
+Phase 2 — Data import and exact map preservation
+- Implement a robust CHIPS.DAT parser with bounds checking and actionable errors.
+- Add an importer/validator that checks all levels and can compare every decoded field and tile coordinate with the source.
+- Establish the new runtime data format if useful, preserving unknown fields and documenting tile IDs.
+- Display every imported map in a debug level viewer; visually compare against supplied map images, while treating decoded pack data as authoritative.
+- Do not proceed with hand-authored substitute levels.
+
+Phase 3 — Core deterministic engine
+- Implement state types and the turn/tick scheduler independently from SDL/rendering.
+- Add ordinary walking, facing, walls, chips, sockets, exit, keys/doors, boots/hazards, dirt/gravel, blocks/pushes, and timers.
+- Support deterministic mouse-target commands in the engine/replay path and map scaled window clicks through the current camera viewport to exact board coordinates.
+- Add restart/death/win transitions and a debug state inspector.
+- Write replayable input sequences and compact state snapshots so specific scenarios can be repeated.
+
+Phase 4 — Complete rules and creatures
+- Implement special terrain, ice corners and force floors, hidden/fake/popup/panel terrain, toggle controls, linked traps/clones, bombs, thieves, teleporters, and all creature types.
+- Port creature AI and ordering from movement.asm/logic.asm into clear independent code. Document deviations/uncertain edge cases.
+- Add deterministic random behavior with an explicit seed/state where the original rules use randomness.
+- Use the mechanics audit to ensure no category is forgotten; resolve each category to implemented, intentionally unsupported with reason, or verified irrelevant to the 149-level campaign.
+
+Phase 5 — Art, animation, audio, and interface
+- Convert the original sprite, icon, digit, and presentation resources into clean 32-bit runtime assets. Build a deterministic atlas/pipeline with exact tile-ID mapping, transparent layers where applicable, and directional/animated variants. Record source hashes and conversion details; leave the supplied originals unchanged.
+- Create and review polished sprite variants directly from the original assets. Compare them side-by-side at native tile size and modern display scale; keep the faithful conversion available if a polish pass harms recognizability or legibility.
+- Render the correct two-layer tiles and moving entities, add readable UI, transitions, animation, sound, music controls, and high-DPI scaling.
+- Implement menus, level select, pause, restart, settings, help, and campaign progress.
+
+Phase 6 — Progress, packaging, and ongoing updates
+- Add versioned user saves and robust settings persistence.
+- Package a Windows x64 build with required assets and no emulator/original executable dependency.
+- Document macOS/Linux native build prerequisites and provide a portability checklist.
+- After each user update, inspect the current state, implement the requested next increment, preserve working behavior, and summarize changed files, run/build verification actually performed, and remaining issues. Do not replace large areas wholesale when a focused change is sufficient.
+
+ACCEPTANCE CRITERIA
+
+- A clean checkout can be configured and built as a native Windows 64-bit application using documented steps; the app launches without OTVDM/Wine or the supplied executable.
+- The imported campaign has the same 149 maps, level order, and all 32x32 top/bottom tile values and relevant metadata as the canonical pack. Provide a machine-readable validation report or reproducible comparison command.
+- Engine behavior is deterministic for the same level, initial state, random seed, and input sequence.
+- The classic ruleset is implemented and every campaign level is playable; document any unverified behavior precisely rather than claiming completeness.
+- The supplied original artwork is the source of the documented 32-bit runtime assets and polished variants, with exact tile-ID mapping and a reproducible provenance path; the legacy executable, emulator, and assembly are not runtime dependencies. Audio provenance remains documented separately.
+- Windows user experience supports modern sizing/scaling, menus, campaign navigation, keyboard and mouse-target board movement, settings, progress saves, pause/restart, and useful failure messages.
+- The code remains platform-neutral where practical, and macOS/Linux build support is documented as future work until verified on those platforms.
+
+WORKING STYLE
+
+Implement one coherent vertical slice at a time. At the start, report the repository findings and proposed module layout, then begin Phase 0/1 work rather than returning only a design document. Keep notes concise and update the plan as real constraints appear. Before each substantial change, identify the intended files and acceptance condition; after it, report exactly what changed and what was actually built or verified. Keep original source/data immutable. Ask the user only when a product decision cannot be inferred; otherwise use sound defaults and continue.

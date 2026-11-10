@@ -1,0 +1,82 @@
+name: Native builds
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and package Windows x64
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          ./scripts/build-windows.ps1
+          -BuildDirectory build
+          -Generator "Visual Studio 17 2022"
+          -Architecture x64
+          -Configuration Release
+          -Package
+          -PackageDirectory dist
+
+      - name: Install Linux SDL3 backend dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+            libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev \
+            libusb-1.0-0-dev \
+            libpipewire-0.3-dev libwayland-dev libdecor-0-dev
+
+      - name: Configure (macOS and Linux)
+        if: runner.os != 'Windows'
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        if: runner.os != 'Windows'
+        run: cmake --build build --config Release --parallel
+
+      - name: Stage relocatable application (macOS and Linux)
+        if: runner.os != 'Windows'
+        run: cmake --install build --prefix "$GITHUB_WORKSPACE/stage"
+
+      - name: Validate staged application and original assets (macOS and Linux)
+        if: runner.os != 'Windows'
+        run: |
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate "$GITHUB_WORKSPACE/stage/data/CHIPS.DAT"
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate-atlas "$GITHUB_WORKSPACE/stage/assets/art/tile-atlas.png"
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate-icon "$GITHUB_WORKSPACE/stage/assets/art/app-icon-polished.png"
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate-player-sprites \
+            "$GITHUB_WORKSPACE/stage/assets/art/player-poses-polished.png" \
+            "$GITHUB_WORKSPACE/stage/assets/art/player-swim-poses-polished.png"
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate-cleaned-sprites \
+            "$GITHUB_WORKSPACE/stage/assets/art/creature-sprites-polished.png" \
+            "$GITHUB_WORKSPACE/stage/assets/art/key-boot-icons-polished.png"
+          "$GITHUB_WORKSPACE/stage/chips-native" --validate-digits "$GITHUB_WORKSPACE/stage/assets/art/digital-digits.png"
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Upload portable Windows package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chips-native-windows-x64-release
+          path: dist/chips-native-windows-x64-Release.zip
+          if-no-files-found: error

@@ -1,0 +1,57 @@
+[
+  {
+    "level": 1,
+    "status": "solved",
+    "completed_by_player": true,
+    "moves": 90,
+    "route": "EENNEEESNWWWSSSSWSSSSNNNNNWWWNNNNNWESSWWWSENEESSSSWWNWESEEESSSNNNEEEEEENSWWWNNNNNNEWSSWWNN"
+  },
+  {
+    "level": 2,
+    "status": "solved",
+    "completed_by_player": true,
+    "input_mode": "press",
+    "moves": 53,
+    "route": "EENSSWWWNENWWWWESSENENWWWWWWNNNWWWWSSSSSSSSEEWWNNNNWW"
+  },
+  {
+    "level": 3,
+    "status": "solved",
+    "completed_by_player": null,
+    "input_mode": "settled_press",
+    "moves": 58,
+    "route": "ESNNNNNWSSWWWSSNNEEEEEEESSSWWSSSWWEENEEEEENNNNNNNWWWNNNWWWNN"
+  },
+  {
+    "level": 6,
+    "status": "solved",
+    "moves": 35,
+    "route": "WWWNNNNWWWSSSSSWNNNENNEEESSSSEEESSS"
+  },
+  {
+    "level": 8,
+    "status": "solved",
+    "completed_by_player": false,
+    "moves": 22,
+    "route": "NEEEENEEEEESEEEEEEEEEE"
+  },
+  {
+    "level": 10,
+    "status": "solved",
+    "moves": 148,
+    "route": "SSSESEEENNNENEEEEEEEEEEESSSWWWNWWWWWWSWSSSSSSWSSSEEEEEEEENEEEEEEEESESESSSSSSSSEEEENNWNNNENNWNNNNNNEESESSSSSSSSSSSSSSSSWSWWWWNNWWWWWWWWWNWNNNNNENEEEE"
+  },
+  {
+    "level": 13,
+    "status": "solved",
+    "input_mode": "settled_press",
+    "moves": 7,
+    "route": "SSSSSSW"
+  },
+  {
+    "level": 75,
+    "status": "solved",
+    "moves": 61,
+    "route": "NWSWWWNWWWSWWWNNWNNENNNNNNWNNNWWWWSSEWSNNNNWNNNNWWWWWWWWWWWWW"
+  }
+]

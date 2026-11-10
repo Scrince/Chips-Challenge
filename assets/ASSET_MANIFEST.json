@@ -1,0 +1,127 @@
+{
+  "schema_version": 4,
+  "asset_scope": "runtime-ready conversions of user-supplied original Windows game artwork",
+  "conversion": "python scripts/import_original_art.py (Pillow); original artwork is converted to RGBA and enlarged with nearest-neighbor sampling; every transparent sprite frame reproduces the source DrawTile image/mask pair with image tile+0x30 and mask tile+0x60.",
+  "legacy_media_policy": "The supplied original artwork is intentionally used at runtime. The legacy executable, assembly, and original audio files remain outside runtime dependencies.",
+  "assets": [
+    {
+      "path": "art/tile-atlas.png",
+      "format": "PNG, RGBA, 832x1024",
+      "provenance": "Original 16-color game tile sheet; converted to RGBA and enlarged 2x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "sha256": "459351212EEB7A02512FEA2BFCD14013DF3CCE9D2A45A0A5EA2B4A008D0A4AA8"
+    },
+    {
+      "path": "art/menu-background.png",
+      "format": "PNG, RGBA, 474x392",
+      "provenance": "Original green circuit-board title background; converted to RGBA and enlarged 2x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/BACKGROUND.bmp",
+      "source_sha256": "F1592FA0AC01B30B339FC0122D16D80CB710C4BDC05AB2C441D745BCB0D3E623",
+      "sha256": "48FC664DEBF0868F046671D21DE2E27FA131994E4A702BACF576B158A9030B43"
+    },
+    {
+      "path": "art/victory-illustration.png",
+      "format": "PNG, RGBA, 576x576",
+      "provenance": "Original CHIPEND victory illustration; converted to RGBA and enlarged 2x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/CHIPEND.bmp",
+      "source_sha256": "C5807862EC04F5F85F281AB694D1AD39E7812C7C2514288CF81467135099D9DC",
+      "sha256": "E3AA03959036BF91232A200DB6695633037019D77148E075A33E978EC829FFB3"
+    },
+    {
+      "path": "art/scoreboard-panel.png",
+      "format": "PNG, RGBA, 308x600",
+      "provenance": "Original INFOWND scoreboard panel with its steel frame, red labels, recessed readout wells, and four corner bolts; converted to RGBA and enlarged 2x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/INFOWND.bmp",
+      "source_sha256": "EEC2B6A1FF8F6BEDD4B458423B06DAA47FC07A2F691B40A1F2624A2FB22E157C",
+      "sha256": "EEC4AC978282C979ACAC9ACD6BDDC8B0E71266DEB7C0540277E1C5A0DE575B63"
+    },
+    {
+      "path": "art/digital-digits.png",
+      "format": "PNG, RGBA, 34x1104",
+      "provenance": "Original scoreboard digit strip; black palette-index 0 converted to transparent RGBA, then enlarged 2x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/200.bmp",
+      "source_sha256": "0CAF246A3B944B4C7D46D9BF7DEE41B09F41729783D6D20B6D0A59731F1BB562",
+      "sha256": "7B1EA377029D333FB442FA55C33C2BE19096FFB8EC082B1C5226D5C3787BFF97"
+    },
+    {
+      "path": "art/app-icon.png",
+      "format": "PNG, RGBA, 256x256",
+      "provenance": "Original Windows game icon; converted to RGBA and enlarged 8x with nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/chips.ico",
+      "source_sha256": "129A9AD6F8033F809930667468F8D878CB66CC51EF073A652FB887CAF1E51511",
+      "sha256": "C696E23499FCFE7FACCC72DD990CE86E42E7AC7049C32C0D22CD90C874C6D3EB"
+    },
+    {
+      "path": "art/app-icon.ico",
+      "format": "ICO, 16/24/32/48/64/128/256 pixel variants",
+      "provenance": "Windows multi-resolution icon generated from the supplied original game icon PNG with nearest-neighbor resizing; embedded as a Windows resource by CMake.",
+      "source": "assets/art/app-icon.png",
+      "source_sha256": "C696E23499FCFE7FACCC72DD990CE86E42E7AC7049C32C0D22CD90C874C6D3EB",
+      "sha256": "DA7715EC38FF3F8B5154A71B8E12967CA8A3803CF1DF8836C8CDC2E369E36715"
+    },
+    {
+      "path": "art/original-transparent-sprites.png",
+      "format": "PNG, RGBA, 1536x2048, 6x8 grid of 256x256 frames for tile IDs 0x40-0x6F",
+      "provenance": "Exact original DrawTile image/mask composition for every transparent sprite ID 0x40-0x6F; image tile ID+0x30, mask tile ID+0x60; black mask transparent; enlarged 8x using nearest-neighbor sampling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "reference": "assets/art/tile-atlas.png image/mask cell pairs",
+      "sha256": "78508DDEE07B52C168A1D2AFB143EC1A9D1511DEF14E29D0DDBBABE3089EFAC7"
+    },
+    {
+      "path": "art/app-icon-polished.png",
+      "format": "PNG, RGBA, 256x256",
+      "provenance": "Checked-in cleaned pixel-art variant of the supplied game's icon; used for the native window and high-resolution Windows executable resource. The exact converted original icon remains packaged as a reference.",
+      "source": "assets/art/app-icon.png",
+      "source_sha256": "C696E23499FCFE7FACCC72DD990CE86E42E7AC7049C32C0D22CD90C874C6D3EB",
+      "reference": "assets/art/app-icon.png",
+      "sha256": "13B5E92F12F98720FA5F9AA6C846B262A86B9B7B6498331C1E1182B355260A5E"
+    },
+    {
+      "path": "art/app-icon-polished.ico",
+      "format": "ICO, multi-resolution polished Windows icon",
+      "provenance": "Checked-in multi-resolution ICO built from the cleaned original-game icon artwork for the Windows executable resource.",
+      "source": "assets/art/app-icon-polished.png",
+      "source_sha256": "13B5E92F12F98720FA5F9AA6C846B262A86B9B7B6498331C1E1182B355260A5E",
+      "reference": "assets/art/app-icon-polished.png",
+      "sha256": "22F7FAB9977DFD09542DD02BFA121B26B20ABBDE480D7F5C3FE439AC9A251A1C"
+    },
+    {
+      "path": "art/player-poses-polished.png",
+      "format": "PNG, RGBA, 2172x724, 4 horizontal 543x724 directional frames for tile IDs 0x6C-0x6F",
+      "provenance": "Checked-in polished land poses derived from the supplied original Chip sprites, ordered north, west, south, east; used by the native renderer with aspect-preserving pixel-crisp scaling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "reference": "assets/art/original-transparent-sprites.png",
+      "sha256": "FAA6A27A28C69AB434D426BDDF555EA726076E84E8D1216B915DCE82AA85EC00"
+    },
+    {
+      "path": "art/player-swim-poses-polished.png",
+      "format": "PNG, RGBA, 2172x724, 4 horizontal 543x724 directional frames for tile IDs 0x3C-0x3F",
+      "provenance": "Checked-in polished swimming poses derived from the supplied original Chip sprites, ordered north, west, south, east; used by the native renderer with aspect-preserving pixel-crisp scaling.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "reference": "assets/art/original-transparent-sprites.png",
+      "sha256": "A0F358B1EADB96376EF09588D5B36E42C4D68895472916CE831EA975A611CCD9"
+    },
+    {
+      "path": "art/creature-sprites-polished.png",
+      "format": "PNG, RGBA, 1536x1536, 6x6 grid for tile IDs 0x40-0x63",
+      "provenance": "Checked-in cleaned creature artwork, ordered by original creature tile ID; pixel-crisp 256px frames with transparent backgrounds. The exact source sprite sheet remains the runtime fallback.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "reference": "assets/art/original-transparent-sprites.png",
+      "sha256": "98F7282FD2F444344C8492C20D0B3D83B03897E0A38BA5BEA62EFF547DB4C209"
+    },
+    {
+      "path": "art/key-boot-icons-polished.png",
+      "format": "PNG, RGBA, 1774x887, 4x2 grid for tile IDs 0x64-0x6B",
+      "provenance": "Checked-in cleaned key and boot artwork, ordered by original item tile ID; transparent square frames. The exact source sprite sheet remains the runtime fallback.",
+      "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp",
+      "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
+      "reference": "assets/art/original-transparent-sprites.png",
+      "sha256": "6B77737F859144F8843E1A3BD612F4C140DF2C0D897015D8FDE3ABA9DEFA0AF0"
+    }
+  ]
+}

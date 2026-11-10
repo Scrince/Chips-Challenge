@@ -1,0 +1,9 @@
+# Deterministic engine replay format. Lines are: level/seed/initial_ticks,
+# followed by move and advance operations in execution order.
+level 1
+seed 1
+initial_ticks 0
+move east
+advance 2
+move south
+advance 8

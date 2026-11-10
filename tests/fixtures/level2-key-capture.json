@@ -1,0 +1,273 @@
+[
+  {
+    "level": 2,
+    "input_format": "key_edges_us_v1",
+    "input_events": [
+      {
+        "t_us": 4076642,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 4322669,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 4662664,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 5011657,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 5309669,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 5564653,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 5847663,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 6140714,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 6433706,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 6717716,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 6988706,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 7241774,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 7543721,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 7826734,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 8129746,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 8381743,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 8660764,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 8925758,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 9177815,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 9442768,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 9691816,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 9985802,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 10239791,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 10507825,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 10777826,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 11055832,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 11326839,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 11612841,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 11862825,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 12127877,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 12423868,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 12663886,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 12937908,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 13210908,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 13472894,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 13740882,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 14040890,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 14327914,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 14624978,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 14920011,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 15219023,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 15514959,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 15775971,
+        "key": "S",
+        "action": "down"
+      },
+      {
+        "t_us": 16016952,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 16260975,
+        "key": "E",
+        "action": "down"
+      },
+      {
+        "t_us": 16560972,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 16804011,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 17071979,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 17346046,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 17645035,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 17894009,
+        "key": "N",
+        "action": "down"
+      },
+      {
+        "t_us": 18160010,
+        "key": "W",
+        "action": "down"
+      },
+      {
+        "t_us": 18431048,
+        "key": "W",
+        "action": "down"
+      }
+    ]
+  }
+]
