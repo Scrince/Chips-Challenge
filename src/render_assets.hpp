@@ -45,6 +45,11 @@ constexpr int scoreboardDigitBank(bool hasTimeLimit) noexcept {
     return hasTimeLimit ? 0 : 12;
 }
 
+constexpr int scoreboardChipsDigitBank(unsigned chipsLeft) noexcept {
+    // The original counter switches from green to yellow when the last chip is collected.
+    return scoreboardDigitBank(chipsLeft != 0U);
+}
+
 constexpr int scoreboardGlyphFrame(int digitBank, unsigned digit) noexcept {
     return 23 - digitBank - static_cast<int>(digit);
 }

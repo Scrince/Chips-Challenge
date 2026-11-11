@@ -854,6 +854,16 @@ int main() {
                            "thief preserves every colored key");
         failures += !check(game.boots == std::array<bool, 4>{false, false, false, false},
                            "thief removes every boot type");
+        failures += !check(game.top[at(2, 1)] == 0x21 && game.thiefActivatedThisTick,
+                           "thief tile remains on the map after activation");
+        game.boots[0] = true;
+        (void)game.move(Direction::west);
+        failures += !check(game.top[at(2, 1)] == 0x21,
+                           "leaving an activated thief preserves the thief tile");
+        (void)game.move(Direction::east);
+        failures += !check(game.top[at(2, 1)] == 0x21 && game.thiefActivatedThisTick &&
+                           game.boots == std::array<bool, 4>{false, false, false, false},
+                           "re-entering the persistent thief activates it again");
     }
     {
         auto level = blankLevel();
@@ -6547,6 +6557,88 @@ int main() {
             }
             failures += !check(found == std::array<unsigned, 4>{1, 1, 1, 1},
                 "Lesson 3 contains exactly one pickup of each canonical boot ID");
+        }
+    }
+
+    {
+        const auto campaign = loadLevelPack(CHIPS_TEST_PACK_PATH);
+        const auto level = std::find_if(campaign.begin(), campaign.end(),
+            [](const Level& candidate) { return candidate.number == 9; });
+        failures += !check(level != campaign.end(), "canonical campaign contains Nuts and Bolts");
+        if (level != campaign.end()) {
+            struct MoveCase {
+                int x;
+                int y;
+                Direction direction;
+                int expectedX;
+                int expectedY;
+                const char* label;
+            };
+            constexpr MoveCase cases[]{
+                {3, 7, Direction::north, 3, 6, "single Up press at Level 9 (3,7)"},
+                {7, 5, Direction::west, 6, 5, "single Left press at Level 9 (7,5)"},
+            };
+            for (const auto& moveCase : cases) {
+                auto game = GameState::start(*level);
+                const int source = at(moveCase.x, moveCase.y);
+                const int destination = at(moveCase.expectedX, moveCase.expectedY);
+                game.playerPosition = source;
+                game.chipHasMoved = false;
+                game.pendingDirection.reset();
+                game.sliding = false;
+                failures += !check(game.surface(source) == 0x2D &&
+                                   game.surface(destination) == 0x2D,
+                    std::string(moveCase.label) + " uses the canonical Gravel cells");
+                const auto result = game.pressMove(moveCase.direction);
+                failures += !check(result == MoveResult::moved &&
+                                   game.playerPosition == destination &&
+                                   !game.pendingDirection,
+                    std::string(moveCase.label) + " changes exactly one intended map cell");
+            }
+
+            for (const auto& moveCase : cases) {
+                const int source = at(moveCase.x, moveCase.y);
+                const int destination = at(moveCase.expectedX, moveCase.expectedY);
+                for (std::uint32_t tickPhase = 0; tickPhase < 4; ++tickPhase) {
+                    auto game = GameState::start(*level, tickPhase);
+                    game.playerPosition = source;
+                    game.chipHasMoved = false;
+                    game.pendingDirection.reset();
+                    game.sliding = false;
+                    const auto result = game.pressMove(moveCase.direction);
+                    failures += !check(result == MoveResult::moved &&
+                                       game.playerPosition == destination,
+                        std::string(moveCase.label) + " immediate key event is one cell at tick phase " +
+                            std::to_string(tickPhase));
+                    game.advanceTicks(2);
+                    failures += !check(game.playerPosition == destination,
+                        std::string(moveCase.label) + " nearby creature turns do not displace Chip at tick phase " +
+                            std::to_string(tickPhase));
+                }
+            }
+
+            for (const auto& moveCase : cases) {
+                const int source = at(moveCase.x, moveCase.y);
+                const int destination = at(moveCase.expectedX, moveCase.expectedY);
+                for (std::uint32_t tickPhase = 0; tickPhase < 4; ++tickPhase) {
+                    auto game = GameState::start(*level, tickPhase);
+                    game.playerPosition = source;
+                    game.chipHasMoved = true; // Physical press arrives inside a closed turn.
+                    game.pendingDirection.reset();
+                    game.sliding = false;
+                    game.creatures.clear();
+                    game.slipOrder.clear();
+                    const auto result = game.pressMove(moveCase.direction);
+                    failures += !check(result == MoveResult::ignored &&
+                                       game.playerPosition == source &&
+                                       game.pendingDirection == moveCase.direction,
+                        std::string(moveCase.label) + " buffers one press while its turn is closed");
+                    game.advanceTicks(4);
+                    failures += !check(game.playerPosition == destination && !game.pendingDirection,
+                        std::string(moveCase.label) + " buffered press moves exactly one cell across tick phase " +
+                            std::to_string(tickPhase));
+                }
+            }
         }
     }
 

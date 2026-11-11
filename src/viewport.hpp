@@ -11,6 +11,20 @@ struct TileViewport {
     int height{};
 };
 
+struct ViewportMotion {
+    int fromX{};
+    int fromY{};
+    int toX{};
+    int toY{};
+};
+
+[[nodiscard]] constexpr ViewportMotion viewportMotion(int fromMapX, int fromMapY,
+                                                       int toMapX, int toMapY,
+                                                       int cameraX, int cameraY) {
+    return {fromMapX - cameraX, fromMapY - cameraY,
+            toMapX - cameraX, toMapY - cameraY};
+}
+
 // Keep a fixed-size window around the player until it reaches an edge, then
 // clamp the camera so the viewport always covers valid map coordinates.
 [[nodiscard]] constexpr TileViewport playerViewport(int playerX, int playerY,

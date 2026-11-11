@@ -66,6 +66,10 @@ struct App {
     bool paused{};
     bool helpVisible{};
     bool debugVisible{};
+    bool debugAllowKeypadMovement{};
+    std::string debugLastMovement;
+    std::string debugLastTickMovement;
+    std::filesystem::path debugInputLogPath;
     bool bestTimesVisible{};
     std::size_t bestTimesPage{};
     bool settingsVisible{};

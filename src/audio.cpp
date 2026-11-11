@@ -2,161 +2,107 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstddef>
+#include <cwchar>
+#include <filesystem>
+#include <string>
 #include <vector>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 
 namespace chips {
 namespace {
 constexpr int kSampleRate = 22050;
 constexpr int kChannels = 2;
+constexpr std::size_t kCueCount = 12;
 
-struct Tone {
-    float startFrequency;
-    float endFrequency;
-    float seconds;
-    float gain;
-    float attackSeconds;
-    float releaseSeconds;
-    enum class Shape { sine, bell, triangle, square, saw } shape;
-};
-
-constexpr Tone note(float startFrequency, float endFrequency, float seconds, float gain,
-                    Tone::Shape shape, float attack = 0.004F, float release = 0.018F) {
-    return {startFrequency, endFrequency, seconds, gain, attack, release, shape};
+std::string pathToUtf8(const std::filesystem::path& path) {
+    const auto encoded = path.u8string();
+    return {reinterpret_cast<const char*>(encoded.data()), encoded.size()};
 }
 
-std::array<Tone, 4> tonesFor(AudioCue cue, std::size_t& count) {
+const char* wavName(AudioCue cue) {
     switch (cue) {
-        case AudioCue::move:
-            count = 1;
-            return {{note(640.0F, 510.0F, 0.026F, 0.075F, Tone::Shape::triangle, 0.001F, 0.012F)}};
-        case AudioCue::blocked:
-            count = 1;
-            return {{note(145.0F, 92.0F, 0.075F, 0.105F, Tone::Shape::square, 0.002F, 0.035F)}};
-        case AudioCue::pickup:
-            count = 2;
-            return {{note(659.25F, 659.25F, 0.070F, 0.105F, Tone::Shape::bell, 0.001F, 0.052F),
-                     note(987.77F, 987.77F, 0.105F, 0.095F, Tone::Shape::bell, 0.001F, 0.082F)}};
+        case AudioCue::move: return nullptr;
+        case AudioCue::blocked: return "OOF3.WAV";
+        case AudioCue::pickup: return "CLICK3.WAV";
         case AudioCue::keyPickup:
-            count = 2;
-            return {{note(880.0F, 1174.66F, 0.055F, 0.095F, Tone::Shape::bell, 0.001F, 0.038F),
-                     note(1318.51F, 1318.51F, 0.105F, 0.085F, Tone::Shape::sine, 0.001F, 0.082F)}};
-        case AudioCue::bootPickup:
-            count = 2;
-            return {{note(392.0F, 523.25F, 0.080F, 0.095F, Tone::Shape::triangle, 0.002F, 0.038F),
-                     note(587.33F, 587.33F, 0.085F, 0.085F, Tone::Shape::square, 0.002F, 0.045F)}};
-        case AudioCue::switchTile:
-            count = 3;
-            return {{note(196.0F, 196.0F, 0.055F, 0.085F, Tone::Shape::square, 0.001F, 0.014F),
-                     note(293.66F, 293.66F, 0.065F, 0.090F, Tone::Shape::triangle, 0.001F, 0.020F),
-                     note(440.0F, 587.33F, 0.105F, 0.090F, Tone::Shape::saw, 0.003F, 0.045F)}};
-        case AudioCue::teleport:
-            count = 2;
-            return {{note(330.0F, 990.0F, 0.105F, 0.085F, Tone::Shape::sine, 0.008F, 0.035F),
-                     note(880.0F, 440.0F, 0.090F, 0.070F, Tone::Shape::bell, 0.001F, 0.060F)}};
-        case AudioCue::death:
-            count = 3;
-            return {{note(392.0F, 330.0F, 0.085F, 0.105F, Tone::Shape::triangle, 0.002F, 0.024F),
-                     note(293.66F, 220.0F, 0.100F, 0.110F, Tone::Shape::triangle, 0.002F, 0.032F),
-                     note(196.0F, 98.0F, 0.190F, 0.115F, Tone::Shape::saw, 0.004F, 0.085F)}};
-        case AudioCue::victory:
-            count = 4;
-            return {{note(392.0F, 392.0F, 0.085F, 0.095F, Tone::Shape::bell, 0.001F, 0.050F),
-                     note(493.88F, 493.88F, 0.085F, 0.095F, Tone::Shape::bell, 0.001F, 0.050F),
-                     note(587.33F, 587.33F, 0.085F, 0.100F, Tone::Shape::bell, 0.001F, 0.050F),
-                     note(783.99F, 783.99F, 0.220F, 0.110F, Tone::Shape::bell, 0.002F, 0.140F)}};
+        case AudioCue::bootPickup: return "BLIP2.WAV";
+        case AudioCue::switchTile: return "POP2.WAV";
+        case AudioCue::teleport: return "TELEPORT.WAV";
+        case AudioCue::death: return "BUMMER.WAV";
+        case AudioCue::levelComplete: return "DITTY1.WAV";
+        case AudioCue::door: return "DOOR.WAV";
+        case AudioCue::thief: return "STRIKE.WAV";
+        case AudioCue::splash: return "WATER2.WAV";
     }
-    count = 0;
-    return {};
+    return nullptr;
 }
 
-float shapeSample(Tone::Shape shape, float phase) {
-    constexpr float tau = 6.28318530718F;
-    const float sine = std::sin(phase * tau);
-    switch (shape) {
-        case Tone::Shape::sine: return sine;
-        case Tone::Shape::bell:
-            return 0.74F * sine + 0.20F * std::sin(phase * tau * 2.0F)
-                 + 0.06F * std::sin(phase * tau * 3.0F);
-        case Tone::Shape::triangle: return 0.63661977F * std::asin(sine);
-        case Tone::Shape::square: return sine >= 0.0F ? 1.0F : -1.0F;
-        case Tone::Shape::saw: return 2.0F * phase - 1.0F;
-    }
-    return 0.0F;
+std::size_t cueIndex(AudioCue cue) {
+    return static_cast<std::size_t>(cue);
 }
 
-std::vector<float> originalMusicLoop() {
-    constexpr float beatSeconds = 60.0F / 116.0F;
-    constexpr std::array<int, 32> melodyMidi{
-        72, 76, 79, 76, 69, 72, 76, 79, 65, 69, 72, 69, 67, 71, 74, 79,
-        72, 74, 76, 79, 69, 67, 64, 72, 65, 67, 69, 72, 67, 64, 62, 60};
-    constexpr std::array<int, 8> bassMidi{36, 33, 29, 31, 36, 33, 29, 31};
-    std::array<float, 32> melodyFrequencies{};
-    std::array<float, 8> bassFrequencies{};
-    for (std::size_t i = 0; i < melodyFrequencies.size(); ++i)
-        melodyFrequencies[i] = 440.0F * std::pow(2.0F,
-            static_cast<float>(melodyMidi[i] - 69) / 12.0F);
-    for (std::size_t i = 0; i < bassFrequencies.size(); ++i)
-        bassFrequencies[i] = 440.0F * std::pow(2.0F,
-            static_cast<float>(bassMidi[i] - 69) / 12.0F);
-    const auto totalFrames = static_cast<std::size_t>(
-        std::lround(beatSeconds * 32.0F * static_cast<float>(kSampleRate)));
-    std::vector<float> samples(totalFrames * kChannels);
-    constexpr float tau = 6.28318530718F;
-    for (std::size_t frame = 0; frame < totalFrames; ++frame) {
-        const float time = static_cast<float>(frame) / static_cast<float>(kSampleRate);
-        const float beatPosition = time / beatSeconds;
-        const auto beat = std::min<std::size_t>(31, static_cast<std::size_t>(beatPosition));
-        const float beatProgress = beatPosition - static_cast<float>(beat);
-        const float melodyFrequency = melodyFrequencies[beat];
-        const float bassFrequency = bassFrequencies[beat / 4];
-        const float melodyPhase = time * melodyFrequency;
-        const float bassPhase = time * bassFrequency;
-        const float attack = std::min(1.0F, beatProgress * 24.0F);
-        const float release = std::min(1.0F, (1.0F - beatProgress) * 10.0F);
-        const float bassEnvelope = std::min(1.0F, beatProgress * 40.0F) *
-                                   std::min(1.0F, (1.0F - beatProgress) * 8.0F);
-        const float melody = (std::sin(melodyPhase * tau) * 0.72F +
-            std::sin(melodyPhase * tau * 2.0F) * 0.20F +
-            std::sin(melodyPhase * tau * 3.0F) * 0.08F) * attack * release * 0.16F;
-        const float bass = (0.63661977F * std::asin(std::sin(bassPhase * tau))) *
-                           bassEnvelope * 0.095F;
-        const float sample = melody + bass;
-        samples[frame * 2] = sample * 0.96F;
-        samples[frame * 2 + 1] = sample;
-    }
-    return samples;
+#ifdef _WIN32
+bool sendMci(const std::wstring& command) {
+    wchar_t error[256]{};
+    const auto result = mciSendStringW(command.c_str(), nullptr, 0, nullptr);
+    if (result == 0) return true;
+    mciGetErrorStringW(result, error, static_cast<UINT>(std::size(error)));
+    SDL_Log("MIDI playback command failed: %ls", error);
+    return false;
 }
 
-const std::vector<float>& musicLoop() {
-    static const auto samples = originalMusicLoop();
-    return samples;
-}
+bool playMciSequence() {
+    if (!sendMci(L"seek chips_native_music to start")) return false;
+    return sendMci(L"play chips_native_music repeat") ||
+           sendMci(L"play chips_native_music");
 }
 
-AudioSystem::~AudioSystem() {
-    shutdown();
+bool queryMciNumber(const std::wstring& command, Uint64& value) {
+    wchar_t response[64]{};
+    if (mciSendStringW(command.c_str(), response,
+                       static_cast<UINT>(std::size(response)), nullptr) != 0)
+        return false;
+    wchar_t* end{};
+    const auto parsed = std::wcstoull(response, &end, 10);
+    if (end == response) return false;
+    value = static_cast<Uint64>(parsed);
+    return true;
 }
+#endif
+}
+
+AudioSystem::~AudioSystem() { shutdown(); }
 
 void AudioSystem::shutdown() {
+#ifdef _WIN32
+    if (midiOpen_) {
+        sendMci(L"stop chips_native_music");
+        sendMci(L"close chips_native_music");
+        midiOpen_ = false;
+        midiPlaying_ = false;
+    }
+#endif
+    for (auto& samples : effects_) samples.clear();
     if (stream_) {
         SDL_DestroyAudioStream(stream_);
         stream_ = nullptr;
     }
-    if (musicStream_) {
-        SDL_DestroyAudioStream(musicStream_);
-        musicStream_ = nullptr;
-    }
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
-bool AudioSystem::initialize() {
+bool AudioSystem::initialize(const std::filesystem::path& resourceRoot) {
+    resourceRoot_ = resourceRoot;
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         SDL_Log("Audio is unavailable; continuing without sound: %s", SDL_GetError());
         return false;
     }
-    const SDL_AudioSpec spec{SDL_AUDIO_F32, kChannels, kSampleRate};
-    stream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+    const SDL_AudioSpec outputSpec{SDL_AUDIO_F32, kChannels, kSampleRate};
+    stream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &outputSpec, nullptr, nullptr);
     if (!stream_) {
         SDL_Log("Could not open audio output; continuing without sound: %s", SDL_GetError());
         return false;
@@ -168,87 +114,141 @@ bool AudioSystem::initialize() {
         stream_ = nullptr;
         return false;
     }
-    musicStream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
-    if (musicStream_) {
-        updateMusicGain();
-        if (!SDL_ResumeAudioStreamDevice(musicStream_)) {
-            SDL_Log("Could not start music output; continuing with sound effects only: %s", SDL_GetError());
-            SDL_DestroyAudioStream(musicStream_);
-            musicStream_ = nullptr;
+
+    std::array<bool, kCueCount> loaded{};
+    for (std::size_t i = 0; i < kCueCount; ++i) {
+        const auto cue = static_cast<AudioCue>(i);
+        const auto* name = wavName(cue);
+        if (!name) continue;
+        const auto file = resourceRoot_ / "assets" / "audio" / name;
+        const auto fileUtf8 = pathToUtf8(file);
+        SDL_AudioSpec sourceSpec{};
+        Uint8* sourceData{};
+        Uint32 sourceLength{};
+        if (!SDL_LoadWAV(fileUtf8.c_str(), &sourceSpec, &sourceData, &sourceLength)) {
+            SDL_Log("Unable to load original sound %s: %s", fileUtf8.c_str(), SDL_GetError());
+            continue;
         }
-    } else {
-        SDL_Log("Could not open music output; continuing with sound effects only: %s", SDL_GetError());
+        SDL_AudioStream* converter = SDL_CreateAudioStream(&sourceSpec, &outputSpec);
+        if (!converter || !SDL_PutAudioStreamData(converter, sourceData,
+                                                   static_cast<int>(sourceLength)) ||
+            !SDL_FlushAudioStream(converter)) {
+            SDL_Log("Unable to convert original sound %s: %s", fileUtf8.c_str(), SDL_GetError());
+            if (converter) SDL_DestroyAudioStream(converter);
+            SDL_free(sourceData);
+            continue;
+        }
+        const int convertedLength = SDL_GetAudioStreamAvailable(converter);
+        if (convertedLength > 0) {
+            auto& samples = effects_[i];
+            samples.resize(static_cast<std::size_t>(convertedLength) / sizeof(float));
+            const int bytesRead = SDL_GetAudioStreamData(converter, samples.data(), convertedLength);
+            if (bytesRead != convertedLength) samples.clear();
+            else loaded[i] = true;
+        }
+        SDL_DestroyAudioStream(converter);
+        SDL_free(sourceData);
+        if (!loaded[i]) SDL_Log("Original sound %s contained no playable samples", name);
     }
-    update();
+    SDL_Log("Loaded original sound cues: %s", std::count(loaded.begin(), loaded.end(), true) > 0
+        ? "yes" : "none");
     return true;
-}
-
-void AudioSystem::update() {
-    if (!musicStream_ || musicMuted_ || musicVolume_ <= 0.0F) return;
-    const auto& loop = musicLoop();
-    const auto loopBytes = static_cast<int>(loop.size() * sizeof(float));
-    const int availableBytes = SDL_GetAudioStreamAvailable(musicStream_);
-    if (availableBytes < 0) {
-        disableMusic("Could not query background-music stream");
-        return;
-    }
-    if (availableBytes < loopBytes)
-        queueMusic();
-}
-
-void AudioSystem::queueMusic() {
-    if (!musicStream_ || musicMuted_ || musicVolume_ <= 0.0F) return;
-    const auto& loop = musicLoop();
-    const auto loopBytes = static_cast<int>(loop.size() * sizeof(float));
-    for (int i = 0; i < 2; ++i) {
-        if (!SDL_PutAudioStreamData(musicStream_, loop.data(), loopBytes)) {
-            disableMusic("Could not queue original background music");
-            return;
-        }
-    }
-}
-
-void AudioSystem::disableMusic(const char* reason) {
-    if (!musicStream_) return;
-    SDL_Log("%s; continuing without background music: %s", reason, SDL_GetError());
-    SDL_DestroyAudioStream(musicStream_);
-    musicStream_ = nullptr;
 }
 
 void AudioSystem::play(AudioCue cue) {
     if (!stream_ || muted_ || volume_ <= 0.0F) return;
-    std::size_t toneCount{};
-    const auto tones = tonesFor(cue, toneCount);
-    std::size_t totalFrames = 0;
-    for (std::size_t i = 0; i < toneCount; ++i)
-        totalFrames += static_cast<std::size_t>(tones[i].seconds * kSampleRate);
-    std::vector<float> samples(totalFrames * kChannels);
-    std::size_t frame = 0;
-    for (std::size_t toneIndex = 0; toneIndex < toneCount; ++toneIndex) {
-        const auto& tone = tones[toneIndex];
-        const auto frames = static_cast<std::size_t>(tone.seconds * kSampleRate);
-        float phase = 0.0F;
-        for (std::size_t i = 0; i < frames; ++i, ++frame) {
-            const float progress = frames > 1
-                ? static_cast<float>(i) / static_cast<float>(frames - 1) : 0.0F;
-            const float frequency = tone.startFrequency +
-                (tone.endFrequency - tone.startFrequency) * progress;
-            phase += frequency / static_cast<float>(kSampleRate);
-            phase -= std::floor(phase);
-            const float attack = tone.attackSeconds > 0.0F
-                ? std::min(1.0F, static_cast<float>(i) /
-                    (tone.attackSeconds * static_cast<float>(kSampleRate))) : 1.0F;
-            const float release = tone.releaseSeconds > 0.0F
-                ? std::min(1.0F, static_cast<float>(frames - i) /
-                    (tone.releaseSeconds * static_cast<float>(kSampleRate))) : 1.0F;
-            const float sample = shapeSample(tone.shape, phase) * attack * release * tone.gain;
-            samples[frame * 2] = sample;
-            samples[frame * 2 + 1] = sample;
-        }
-    }
+    const auto index = cueIndex(cue);
+    if (index >= effects_.size() || effects_[index].empty()) return;
+    const auto& samples = effects_[index];
     const auto bytes = static_cast<int>(samples.size() * sizeof(float));
     if (!SDL_PutAudioStreamData(stream_, samples.data(), bytes))
-        SDL_Log("Could not queue sound effect: %s", SDL_GetError());
+        SDL_Log("Could not queue original sound effect: %s", SDL_GetError());
+}
+
+std::size_t AudioSystem::loadedCueCount() const {
+    return static_cast<std::size_t>(std::count_if(effects_.begin(), effects_.end(),
+        [](const auto& samples) { return !samples.empty(); }));
+}
+
+void AudioSystem::startMusic(unsigned levelNumber) {
+#ifdef _WIN32
+    stopMusic();
+    if (midiOutGetNumDevs() == 0) {
+        SDL_Log("Background MIDI is unavailable: Windows reports no MIDI output device");
+        return;
+    }
+    const wchar_t* filename = (levelNumber % 2 == 0) ? L"CHIP02.MID" : L"CHIP01.MID";
+    const auto audioFile = resourceRoot_ / "assets" / "audio" / filename;
+    if (!std::filesystem::is_regular_file(audioFile)) {
+        SDL_Log("Background MIDI file is missing: %s", pathToUtf8(audioFile).c_str());
+        return;
+    }
+    const auto path = audioFile.wstring();
+    std::wstring command = L"open \"" + path + L"\" type sequencer alias chips_native_music";
+    if (!sendMci(command)) return;
+    midiOpen_ = true;
+    // Durations are calculated from the supplied SMF tempo maps. Keep this
+    // timer as a fallback because some Windows MCI drivers report stale mode
+    // and position values after a sequence reaches its end.
+    midiTrackLengthMs_ = (levelNumber % 2 == 0) ? 45517U : 36461U;
+    sendMci(L"set chips_native_music time format milliseconds");
+    SDL_Log("Loaded MIDI background track length: %llu ms",
+            static_cast<unsigned long long>(midiTrackLengthMs_));
+    updateMusicGain();
+#else
+    (void)levelNumber;
+#endif
+}
+
+void AudioSystem::stopMusic() {
+#ifdef _WIN32
+    if (midiOpen_) {
+        if (midiPlaying_) sendMci(L"stop chips_native_music");
+        sendMci(L"close chips_native_music");
+        midiOpen_ = false;
+        midiPlaying_ = false;
+        midiTrackLengthMs_ = 0;
+    }
+#endif
+}
+
+void AudioSystem::update() {
+#ifdef _WIN32
+    if (!midiOpen_ || musicMuted_ || musicVolume_ <= 0.0F) return;
+    const Uint64 now = SDL_GetTicks();
+    if (now < nextMidiStatusCheck_) return;
+    nextMidiStatusCheck_ = now + 250;
+
+    wchar_t mode[32]{};
+    const auto result = mciSendStringW(L"status chips_native_music mode", mode,
+                                       static_cast<UINT>(std::size(mode)), nullptr);
+    if (result != 0) {
+        wchar_t error[256]{};
+        mciGetErrorStringW(result, error, static_cast<UINT>(std::size(error)));
+        SDL_Log("Could not check MIDI playback status: %ls", error);
+        return;
+    }
+    bool trackEnded = std::wcscmp(mode, L"playing") != 0;
+    if (!trackEnded && midiTrackLengthMs_ > 0) {
+        Uint64 position{};
+        if (queryMciNumber(L"status chips_native_music position", position) &&
+            position >= midiTrackLengthMs_)
+            trackEnded = true;
+        const Uint64 elapsed = now - midiTrackStartedAt_;
+        if (elapsed >= midiTrackLengthMs_ + 100)
+            trackEnded = true;
+    }
+    if (trackEnded) {
+        sendMci(L"stop chips_native_music");
+        if (playMciSequence()) {
+            midiPlaying_ = true;
+            midiTrackStartedAt_ = now;
+        } else {
+            midiPlaying_ = false;
+            SDL_Log("Unable to restart the level's MIDI background music.");
+        }
+    }
+#endif
 }
 
 void AudioSystem::setVolume(float volume) {
@@ -264,13 +264,11 @@ void AudioSystem::setMuted(bool muted) {
 void AudioSystem::setMusicVolume(float volume) {
     musicVolume_ = std::clamp(volume, 0.0F, 1.0F);
     updateMusicGain();
-    update();
 }
 
 void AudioSystem::setMusicMuted(bool muted) {
     musicMuted_ = muted;
     updateMusicGain();
-    update();
 }
 
 void AudioSystem::updateGain() {
@@ -279,7 +277,24 @@ void AudioSystem::updateGain() {
 }
 
 void AudioSystem::updateMusicGain() {
-    if (musicStream_ && !SDL_SetAudioStreamGain(musicStream_, musicMuted_ ? 0.0F : musicVolume_))
-        disableMusic("Could not update background-music volume");
+#ifdef _WIN32
+    if (!midiOpen_) return;
+    const auto volume = musicMuted_ ? 0 : static_cast<int>(musicVolume_ * 1000.0F);
+    sendMci(L"setaudio chips_native_music volume to " + std::to_wstring(volume));
+    if (musicMuted_ || musicVolume_ <= 0.0F) {
+        if (midiPlaying_) sendMci(L"stop chips_native_music");
+        midiPlaying_ = false;
+    } else if (!midiPlaying_) {
+        if (!playMciSequence()) {
+            SDL_Log("Unable to start the level's MIDI background music.");
+            sendMci(L"close chips_native_music");
+            midiOpen_ = false;
+        } else {
+            midiPlaying_ = true;
+            nextMidiStatusCheck_ = SDL_GetTicks() + 250;
+            midiTrackStartedAt_ = SDL_GetTicks();
+        }
+    }
+#endif
 }
 }

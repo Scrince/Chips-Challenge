@@ -3,22 +3,31 @@
 #include <SDL3/SDL.h>
 
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 
 int main() {
     chips::AudioSystem audio;
-    if (!audio.initialize()) {
+    if (!audio.initialize(std::filesystem::path(CHIPS_TEST_RESOURCE_ROOT))) {
         std::cerr << "Dummy SDL audio backend failed to initialize: " << SDL_GetError() << '\n';
         SDL_Quit();
         return EXIT_FAILURE;
     }
     audio.setVolume(0.4F);
-    audio.play(chips::AudioCue::move);
-    audio.play(chips::AudioCue::blocked);
-    audio.play(chips::AudioCue::pickup);
-    audio.play(chips::AudioCue::switchTile);
-    audio.play(chips::AudioCue::death);
-    audio.play(chips::AudioCue::victory);
+    for (const auto cue : {chips::AudioCue::move, chips::AudioCue::blocked,
+             chips::AudioCue::pickup, chips::AudioCue::keyPickup,
+             chips::AudioCue::bootPickup, chips::AudioCue::switchTile,
+             chips::AudioCue::teleport, chips::AudioCue::death,
+             chips::AudioCue::levelComplete, chips::AudioCue::door,
+             chips::AudioCue::thief, chips::AudioCue::splash})
+        audio.play(cue);
+    if (audio.loadedCueCount() != 11) {
+        std::cerr << "Expected all eleven original WAV-backed sound cues to load; got "
+                  << audio.loadedCueCount() << '\n';
+        audio.shutdown();
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
     audio.setMuted(true);
     audio.play(chips::AudioCue::move);
     audio.setMuted(false);
@@ -31,6 +40,6 @@ int main() {
     }
     audio.shutdown();
     SDL_Quit();
-    std::cout << "SDL audio stream and all procedural cues passed.\n";
+    std::cout << "Original WAV effects loaded and SDL audio controls passed.\n";
     return EXIT_SUCCESS;
 }

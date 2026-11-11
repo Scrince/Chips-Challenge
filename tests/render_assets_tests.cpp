@@ -30,11 +30,12 @@ int main() {
         ++failures;
     }
     if (chips::scoreboardDigitBank(true) != 0 || chips::scoreboardDigitBank(false) != 12 ||
+        chips::scoreboardChipsDigitBank(1) != 0 || chips::scoreboardChipsDigitBank(0) != 12 ||
         chips::scoreboardGlyphFrame(0, 0) != 23 ||
         chips::scoreboardGlyphFrame(0, 1) != 22 ||
         chips::scoreboardGlyphFrame(0, 10) != 13 ||
         chips::scoreboardGlyphFrame(12, 11) != 0) {
-        std::cerr << "scoreboard timer selected the wrong original digit color bank\n";
+        std::cerr << "scoreboard selected the wrong original digit color bank\n";
         ++failures;
     }
 

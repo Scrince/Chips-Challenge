@@ -819,23 +819,11 @@ void draw(App& app) {
         }
     }
 
-    float renderX = static_cast<float>(playerX - cameraX);
-    float renderY = static_cast<float>(playerY - cameraY);
-    if (!app.profile.reducedMotion &&
-        app.playerAnimationTo == app.game.playerPosition && app.playerAnimationFrom >= 0) {
-        const int fromX = app.playerAnimationFrom % chips::kBoardWidth - cameraX;
-        const int fromY = app.playerAnimationFrom / chips::kBoardWidth - cameraY;
-        const int distance = std::abs(fromX - playerX) + std::abs(fromY - playerY);
-        if (chips::shouldInterpolateTileMotion(fromX, fromY, playerX, playerY,
-                                               app.playerAnimationTeleported) && distance == 1) {
-            constexpr float kPlayerMoveAnimationMs = 90.0F;
-            const float progress = std::clamp(
-                static_cast<float>(SDL_GetTicks() - app.playerAnimationStart) / kPlayerMoveAnimationMs,
-                0.0F, 1.0F);
-            renderX = static_cast<float>(fromX) + static_cast<float>(playerX - fromX) * progress;
-            renderY = static_cast<float>(fromY) + static_cast<float>(playerY - fromY) * progress;
-        }
-    }
+    // The original board updates Chip on discrete game ticks. Render the
+    // logical tile directly so ordinary and forced steps do not blend into a
+    // continuous slide; creature animations remain independently animated.
+    const float renderX = static_cast<float>(playerX - cameraX);
+    const float renderY = static_cast<float>(playerY - cameraY);
     SDL_FRect player{static_cast<float>(originX) + std::round(renderX * static_cast<float>(cell)),
                      static_cast<float>(originY) + std::round(renderY * static_cast<float>(cell)),
                      static_cast<float>(cell - 1), static_cast<float>(cell - 1)};
@@ -911,11 +899,13 @@ void draw(App& app) {
                       51.0F * panelScale, digitHeight * panelScale,
                       app.game.secondsLeft, chips::scoreboardDigitBank(timedLevel),
                       timedLevel);
-    setColor(app.renderer, SDL_Color{0, 255, 32, 255});
+    const bool chipsRemain = app.game.chipsLeft != 0;
+    setColor(app.renderer, chipsRemain ? SDL_Color{0, 255, 32, 255}
+                                       : SDL_Color{255, 255, 0, 255});
     drawDigitalNumber(app.renderer, app.digitalDigits, panel.x + 47.0F * panelScale,
                       panel.y + 189.0F * panelScale,
                       51.0F * panelScale, digitHeight * panelScale,
-                      app.game.chipsLeft, chips::scoreboardDigitBank(true),
+                      app.game.chipsLeft, chips::scoreboardChipsDigitBank(app.game.chipsLeft),
                       level.chipsRequired != 0);
     setColor(app.renderer, kCardText);
     constexpr std::array<std::uint8_t, 4> keyTiles{0x64, 0x65, 0x66, 0x67};
@@ -1016,12 +1006,12 @@ void draw(App& app) {
             const auto slipRows = std::min<std::size_t>(4, app.game.slipOrder.size());
             if (creatureRows != 0)
                 debugPanelHeight = std::max(debugPanelHeight,
-                    180.0F + static_cast<float>(creatureRows - 1) * 18.0F + 30.0F);
+                    214.0F + static_cast<float>(creatureRows - 1) * 18.0F + 30.0F);
             if (slipRows != 0)
                 debugPanelHeight = std::max(debugPanelHeight,
-                    258.0F + static_cast<float>(slipRows - 1) * 18.0F + 30.0F);
+                    296.0F + static_cast<float>(slipRows - 1) * 18.0F + 30.0F);
             if (app.game.creatures.size() > creatureRows || app.game.slipOrder.size() > slipRows)
-                debugPanelHeight = std::max(debugPanelHeight, 370.0F);
+                debugPanelHeight = std::max(debugPanelHeight, 408.0F);
         }
         const float panelW = app.levelSelect ? grid.width
             : std::min(app.debugVisible ? 640.0F : 520.0F, static_cast<float>(outputWidth) - 40.0F);
@@ -1085,8 +1075,10 @@ void draw(App& app) {
                 "TICK %u   RNG %08X   OUTCOME %s   CAUSE %s", game.gameTicks,
                 static_cast<unsigned>(game.randomState), outcomeName(), deathCauseName());
             drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 72.0F,
-                "CHIP %02d,%02d CELL %04d FACE %s", player % chips::kBoardWidth,
-                player / chips::kBoardWidth, player, playerDirections[static_cast<std::size_t>(game.facing)]);
+                "CHIP %02d,%02d CELL %04d FACE %s CAM %02d,%02d VIEW %02d,%02d",
+                player % chips::kBoardWidth, player / chips::kBoardWidth, player,
+                playerDirections[static_cast<std::size_t>(game.facing)], board.cameraX, board.cameraY,
+                board.playerX - board.cameraX, board.playerY - board.cameraY);
             drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 92.0F,
                 "LAYERS TOP %02X BOTTOM %02X FLOOR %02X SURFACE %02X",
                 static_cast<unsigned>(game.top[static_cast<std::size_t>(player)]),
@@ -1098,13 +1090,20 @@ void draw(App& app) {
                 game.boots[0] ? 1U : 0U, game.boots[1] ? 1U : 0U,
                 game.boots[2] ? 1U : 0U, game.boots[3] ? 1U : 0U);
             const auto slideDirection = static_cast<unsigned>(game.slideDirection);
+            const auto bufferedDirection = game.pendingDirection
+                ? playerDirections[static_cast<std::size_t>(*game.pendingDirection)] : "NONE";
             drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 132.0F,
-                "SLIDING %s DIR %s   MOVED %u   IDLE TICKS %u",
+                "SLIDING %s DIR %s   MOVED %u   IDLE TICKS %u   BUFFER %s",
                 game.sliding ? "YES" : "NO", playerDirections[slideDirection],
-                game.chipHasMoved ? 1U : 0U, static_cast<unsigned>(game.idleTickCount));
+                game.chipHasMoved ? 1U : 0U, static_cast<unsigned>(game.idleTickCount),
+                bufferedDirection);
+            drawMediumUiText(app.renderer, panelLeft + 24.0F, panelTop + 152.0F,
+                             app.debugLastMovement.empty() ? "INPUT NONE" : app.debugLastMovement.c_str());
+            drawMediumUiText(app.renderer, panelLeft + 24.0F, panelTop + 170.0F,
+                app.debugLastTickMovement.empty() ? "TICK NONE" : app.debugLastTickMovement.c_str());
             const auto liveCreatures = static_cast<unsigned>(std::count_if(game.creatures.begin(), game.creatures.end(),
                 [](const chips::Creature& creature) { return creature.alive; }));
-            drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 158.0F,
+            drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 192.0F,
                 "CREATURES %u (%u LIVE)   SLIP QUEUE %u",
                 static_cast<unsigned>(game.creatures.size()), liveCreatures,
                 static_cast<unsigned>(game.slipOrder.size()));
@@ -1115,7 +1114,7 @@ void draw(App& app) {
                 const int direction = creature.movementDirection >= 0
                     ? creature.movementDirection : creature.tile & 0x03;
                 drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F,
-                    panelTop + 180.0F + static_cast<float>(i) * 18.0F,
+                    panelTop + 214.0F + static_cast<float>(i) * 18.0F,
                     "CR %02u TILE %02X POS %02d,%02d DIR %s %s",
                     static_cast<unsigned>(i), static_cast<unsigned>(creature.tile),
                     creaturePosition % chips::kBoardWidth, creaturePosition / chips::kBoardWidth,
@@ -1132,7 +1131,7 @@ void draw(App& app) {
                 const int direction = block && position >= 0
                     ? game.blockDirections[static_cast<std::size_t>(position)] : slip.direction;
                 drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F,
-                    panelTop + 258.0F + static_cast<float>(i) * 18.0F,
+                    panelTop + 296.0F + static_cast<float>(i) * 18.0F,
                     "SLIP %02u %s POS %02d,%02d DIR %s",
                     static_cast<unsigned>(i), block ? "BLOCK" : "CREATURE",
                     position >= 0 ? position % chips::kBoardWidth : -1,
@@ -1140,7 +1139,7 @@ void draw(App& app) {
                     direction >= 0 ? creatureDirections[static_cast<std::size_t>(direction & 3)] : "- ");
             }
             if (game.creatures.size() > creatureCount || game.slipOrder.size() > slipCount)
-                drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 338.0F,
+                drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 376.0F,
                     "MORE: %u CREATURES  %u SLIPS",
                     static_cast<unsigned>(game.creatures.size() - creatureCount),
                     static_cast<unsigned>(game.slipOrder.size() - slipCount));

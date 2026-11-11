@@ -51,7 +51,7 @@ Board pickups and inventory use cleaned key/boot art indexed to original IDs `0x
 
 Creature overlays use a cleaned 6x6 sheet indexed to original IDs `0x40`–`0x63`; the imported original image/mask sheet remains available as fallback. The asset manifest records both cleaned-sheet hashes and original-art provenance.
 
-The original synthesized effects remain separate from a newly composed looping background track. Settings now provide independent persisted mute and volume controls for effects and music; profile version 8 migrates older saves with music at a modest default volume.
+The game now uses the supplied original WAV effects and CHIP01/CHIP02 MIDI tracks. Windows plays the MIDI natively with the Windows Multimedia sequencer; SDL3 handles the WAV effects. macOS and Linux currently retain effects playback and need a native MIDI backend. Settings provide independent persisted mute and volume controls for effects and music.
 
 Switch, door, and socket audio now uses an explicit per-tick engine event, so clone and tank buttons sound like switches even when their status messages use different wording or are replaced by another action in the same tick.
 
@@ -172,7 +172,7 @@ The `Native builds` GitHub Actions workflow configures, builds, and runs CTest o
 - `src/engine.hpp`, `src/engine.cpp`: SDL-independent core state, deterministic fixed-tick simulation, tile interactions, and nine creature families.
 - `src/replay.hpp`, `src/replay.cpp`: deterministic input scripts and compact state snapshots for repeatable engine scenarios.
 - `src/password.hpp`, `src/password.cpp`: shared campaign-password normalization and lookup used by the menu and checked against every bundled level.
-- `src/audio.hpp`, `src/audio.cpp`: optional SDL3 audio output with original synthesized effects.
+- `src/audio.hpp`, `src/audio.cpp`: optional SDL3 WAV playback with original effects and a Windows-native MIDI backend.
 - `src/app_state.hpp`: shared application and presentation state.
 - `src/platform_command_line.hpp`, `src/platform_command_line.cpp`: owned UTF-8 command arguments, using the native wide command line on Windows.
 - `src/platform_clock.hpp`, `src/platform_clock.cpp`: session RNG seeding, matching Windows uptime milliseconds and using a monotonic fallback on macOS/Linux.

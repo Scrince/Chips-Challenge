@@ -1,8 +1,8 @@
 {
-  "schema_version": 4,
-  "asset_scope": "runtime-ready conversions of user-supplied original Windows game artwork",
+  "schema_version": 5,
+  "asset_scope": "runtime artwork and original user-supplied Windows game audio",
   "conversion": "python scripts/import_original_art.py (Pillow); original artwork is converted to RGBA and enlarged with nearest-neighbor sampling; every transparent sprite frame reproduces the source DrawTile image/mask pair with image tile+0x30 and mask tile+0x60.",
-  "legacy_media_policy": "The supplied original artwork is intentionally used at runtime. The legacy executable, assembly, and original audio files remain outside runtime dependencies.",
+  "legacy_media_policy": "The supplied original artwork and WAV/MIDI audio are used at runtime. The legacy executable and assembly remain outside runtime dependencies.",
   "assets": [
     {
       "path": "art/tile-atlas.png",
@@ -122,6 +122,102 @@
       "source_sha256": "D9EC41C5BB5133756353219FAA1882F7858FF5590EF5719DE7A0950EDB29BFD6",
       "reference": "assets/art/original-transparent-sprites.png",
       "sha256": "6B77737F859144F8843E1A3BD612F4C140DF2C0D897015D8FDE3ABA9DEFA0AF0"
+    },
+    {
+      "path": "audio/BLIP2.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/BLIP2.WAV",
+      "source_sha256": "579D70F895FE18C35B37E484CF4EA1266882E6427C7D374DB7F1FC8386CDDF24",
+      "sha256": "579D70F895FE18C35B37E484CF4EA1266882E6427C7D374DB7F1FC8386CDDF24"
+    },
+    {
+      "path": "audio/BUMMER.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/BUMMER.WAV",
+      "source_sha256": "DF88038798290A13A7934EDF2A77D9147ED432F46D15208B0A644AAFA0AB48E0",
+      "sha256": "DF88038798290A13A7934EDF2A77D9147ED432F46D15208B0A644AAFA0AB48E0"
+    },
+    {
+      "path": "audio/CHIP01.MID",
+      "format": "Standard MIDI File",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/CHIP01.MID",
+      "source_sha256": "4EA9DE6CA3E63F3534DE5672ADC1E7EEC05DBCBD59859D5F729E546E109B93D2",
+      "sha256": "4EA9DE6CA3E63F3534DE5672ADC1E7EEC05DBCBD59859D5F729E546E109B93D2"
+    },
+    {
+      "path": "audio/CHIP02.MID",
+      "format": "Standard MIDI File",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/CHIP02.MID",
+      "source_sha256": "775CB2A52624CC256A6047228AB4D6C6B7A588CF3067FD8AF89F5A286E2EED25",
+      "sha256": "775CB2A52624CC256A6047228AB4D6C6B7A588CF3067FD8AF89F5A286E2EED25"
+    },
+    {
+      "path": "audio/CLICK3.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/CLICK3.WAV",
+      "source_sha256": "096F7524B8C5FEE09FF5D83D3BB61D58A61288FCF6CF105BA1A1E44D80758B03",
+      "sha256": "096F7524B8C5FEE09FF5D83D3BB61D58A61288FCF6CF105BA1A1E44D80758B03"
+    },
+    {
+      "path": "audio/DITTY1.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/DITTY1.WAV",
+      "source_sha256": "FDBF2DD8A05665D3C0EB99E66E9775A65BCA0DBC154443691E097DD339FF55FF",
+      "sha256": "FDBF2DD8A05665D3C0EB99E66E9775A65BCA0DBC154443691E097DD339FF55FF"
+    },
+    {
+      "path": "audio/DOOR.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/DOOR.WAV",
+      "source_sha256": "51F2B354C00DCF61EDB9D645F76F1867B3DA14FDB1F606B2269830178521A1BD",
+      "sha256": "51F2B354C00DCF61EDB9D645F76F1867B3DA14FDB1F606B2269830178521A1BD"
+    },
+    {
+      "path": "audio/OOF3.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/OOF3.WAV",
+      "source_sha256": "B65E20A521C3A9F1160D1E12C49CD16E81ADF97ED1796C8D3093BE286073B0EB",
+      "sha256": "B65E20A521C3A9F1160D1E12C49CD16E81ADF97ED1796C8D3093BE286073B0EB"
+    },
+    {
+      "path": "audio/POP2.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/POP2.WAV",
+      "source_sha256": "42DC9902AFA86887749EE0B3BD32140515AAAA56823A879AE989D418A232BCC1",
+      "sha256": "42DC9902AFA86887749EE0B3BD32140515AAAA56823A879AE989D418A232BCC1"
+    },
+    {
+      "path": "audio/STRIKE.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/STRIKE.WAV",
+      "source_sha256": "3FB206417137E47256C094AB3D3A88C4A0C2EED15ED4B9B480230C2BC18914F2",
+      "sha256": "3FB206417137E47256C094AB3D3A88C4A0C2EED15ED4B9B480230C2BC18914F2"
+    },
+    {
+      "path": "audio/TELEPORT.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/TELEPORT.WAV",
+      "source_sha256": "57D4070A9048C4594CFF581C8429FC56D3C5F956E4E1EEF3E9ECB56D3418FCD8",
+      "sha256": "57D4070A9048C4594CFF581C8429FC56D3C5F956E4E1EEF3E9ECB56D3418FCD8"
+    },
+    {
+      "path": "audio/WATER2.WAV",
+      "format": "PCM WAV, 8-bit mono",
+      "provenance": "Original audio file supplied by the user and copied byte-for-byte for runtime playback.",
+      "source": "T:/ChipsChallenge/chips_challenge/WATER2.WAV",
+      "source_sha256": "7F38317A459413697539973386DC53BBC6936B07145D5A7ACA9F0AA40CC1F433",
+      "sha256": "7F38317A459413697539973386DC53BBC6936B07145D5A7ACA9F0AA40CC1F433"
     }
   ]
 }

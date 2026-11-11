@@ -402,6 +402,13 @@ MoveResult GameState::pressMove(Direction direction) {
     mouseTargetPosition.reset();
     chipHasMoved = true;
     playerAttemptedThisTick = true;
+    playerMovedThisTick = false;
+    playerTeleportedThisTick = false;
+    switchActivatedThisTick = false;
+    doorOpenedThisTick = false;
+    thiefActivatedThisTick = false;
+    splashThisTick = false;
+    playerPickupThisTick = PickupKind::none;
     return moveInternal(direction, true);
 }
 
@@ -476,8 +483,12 @@ void GameState::advanceMouseTarget() {
 void GameState::advanceTicks(unsigned ticks) {
     for (unsigned i = 0; i < ticks && outcome == Outcome::playing; ++i) {
         playerAttemptedThisTick = false;
+        playerMovedThisTick = false;
         playerTeleportedThisTick = false;
         switchActivatedThisTick = false;
+        doorOpenedThisTick = false;
+        thiefActivatedThisTick = false;
+        splashThisTick = false;
         playerPickupThisTick = PickupKind::none;
         for (auto& creature : creatures) creature.teleportedThisTick = false;
         gameTicks = (gameTicks + 1U) & 0xFFFFU; // Original CurrentTick is a wrapping 16-bit word.
@@ -719,6 +730,7 @@ MoveResult GameState::moveInternal(Direction direction, bool voluntaryInput) {
             return MoveResult::blocked;
         }
     }
+    if (playerPosition != previousPosition) playerMovedThisTick = true;
     // A hazard reached by Chip's own MoveChip call reloads the level in the
     // original before DoTick reaches its slide phase. Preserve a slide only
     // when DoTick entered this forced step after MonsterLoop had already
@@ -1070,6 +1082,7 @@ void GameState::activateCloneButton(int buttonPosition) {
             ? playerSpriteTile() : surface(blockDestination);
         const auto landingAction = landingSprite;
         if (landingAction == 0x03) {
+            splashThisTick = true;
             const auto target = static_cast<std::size_t>(blockDestination);
             // MoveBlock's Water action replaces the block's upper tile with
             // Dirt and preserves the destination's lower-layer terrain.
@@ -1908,6 +1921,7 @@ bool GameState::moveBlockFrom(int sourcePosition, Direction direction,
         ? playerSpriteTile() : surface(blockDestination);
     const auto targetAction = targetSprite;
     if (targetAction == 0x03) {
+        splashThisTick = true;
         // The source action skips the normal upper-to-lower layer copy here.
         top[target] = 0x0B;
         if (activeSlip != slipOrder.end()) slipOrder.erase(activeSlip);
@@ -2072,12 +2086,14 @@ bool GameState::tryMove(Direction direction) {
         if (count == 0) return false;
         if (tile != 0x18) --count; // Green keys are reusable in the original rules.
         switchActivatedThisTick = true;
+        doorOpenedThisTick = true;
         top[dest] = bottom[dest];
         message = "Door unlocked.";
     } else if (tile == 0x22) {
         // Socket shares the door's action-3 layer behavior once its chip gate
         // allows entry: Chip covers it and the underlying terrain remains.
         switchActivatedThisTick = true;
+        doorOpenedThisTick = true;
         top[dest] = bottom[dest];
         message = "Socket opened.";
     } else if (tile == 0x02) {
@@ -2107,10 +2123,11 @@ bool GameState::tryMove(Direction direction) {
         message = level != nullptr && !level->hint.empty()
             ? "Hint: " + level->hint : "No hint is provided for this level.";
     } else if (tile == 0x21) {
+        thiefActivatedThisTick = true;
         // The original thief uses ResetInventory(bootsOnly=1): it removes
-        // every boot but leaves all colored keys untouched.
+        // every boot but leaves all colored keys untouched. Thief terrain is
+        // persistent: Chip standing over it must not consume the map tile.
         boots.fill(false);
-        top[dest] = bottom[dest];
         message = "The thief took your boots; your keys are safe.";
     } else if (tile == 0x2A) {
         playerPosition = destination;

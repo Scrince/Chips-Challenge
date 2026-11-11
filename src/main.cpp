@@ -38,10 +38,17 @@ using chips_native::uiScaleForOutput;
 constexpr std::size_t kLevelSelectorColumns = 13;
 constexpr std::size_t kLevelSelectorRows = 12;
 constexpr std::size_t kLevelSelectorPageSize = kLevelSelectorColumns * kLevelSelectorRows;
+constexpr Uint64 kSimulationTickMs = 95;
 
 std::string pathToUtf8(const std::filesystem::path& path) {
     const auto encoded = path.u8string();
     return {reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+}
+
+void appendDebugInputLog(const App& app, const char* line) {
+    if (app.debugInputLogPath.empty() || line == nullptr) return;
+    std::ofstream log(app.debugInputLogPath, std::ios::binary | std::ios::app);
+    if (log) log << SDL_GetTicks() << ' ' << line << '\n';
 }
 
 std::filesystem::path pathFromUtf8(std::string_view encoded) {
@@ -64,14 +71,26 @@ const std::array<std::uint16_t, 25> kReservedMovementScancodes{
     SDL_SCANCODE_PAGEDOWN, SDL_SCANCODE_UNKNOWN};
 
 int movementIndexForScancode(const App& app, SDL_Scancode scancode) {
-    return chips::movementIndexForKey(static_cast<std::uint16_t>(scancode),
-                                      app.profile.movementBindings, kArrowScancodes);
+    const auto key = static_cast<std::uint16_t>(scancode);
+    const int configuredOrArrow = chips::movementIndexForKey(
+        key, app.profile.movementBindings, kArrowScancodes);
+    if (configuredOrArrow >= 0 || !app.debugAllowKeypadMovement) return configuredOrArrow;
+    constexpr std::array<std::uint16_t, 4> kKeypadDirections{
+        SDL_SCANCODE_KP_8, SDL_SCANCODE_KP_6, SDL_SCANCODE_KP_2, SDL_SCANCODE_KP_4};
+    return chips::movementIndexForKey(key, app.profile.movementBindings, kKeypadDirections);
 }
 
 void resetPlayer(App& app) {
     const auto tickPhase = app.game.gameTicks;
     const auto randomPhase = app.game.randomState;
     app.game = chips::GameState::start(app.levels[app.levelIndex], tickPhase, randomPhase);
+    app.debugLastMovement.clear();
+    app.debugLastTickMovement.clear();
+    if (!app.debugInputLogPath.empty()) {
+        std::ofstream log(app.debugInputLogPath, std::ios::binary | std::ios::trunc);
+        if (log) log << "Level reset " << app.levels[app.levelIndex].number << '\n';
+    }
+    app.debugLastTickMovement.clear();
     app.winRecorded = false;
     app.levelPlacardVisible = true;
     app.levelTimeBonus = 0;
@@ -117,6 +136,13 @@ void togglePause(App& app) {
 }
 
 void persistProfile(App& app, bool announce = true);
+
+void dismissLevelPlacard(App& app) {
+    if (!app.levelPlacardVisible || app.mainMenuVisible) return;
+    app.levelPlacardVisible = false;
+    app.audio.startMusic(static_cast<unsigned>(app.levelIndex + 1));
+    app.lastTick = SDL_GetTicks();
+}
 
 void selectLevel(App& app, std::size_t index) {
     if (index >= app.levels.size()) return;
@@ -290,44 +316,39 @@ void handleBestTimesPointer(App& app, float windowX, float windowY) {
     else if (inside(layout.nextPageButton)) changeBestTimesPage(app, 1);
 }
 
-void movePlayer(App& app, chips::Direction direction) {
+void movePlayer(App& app, chips::Direction direction, const char* inputSource = "PAD",
+                int scancode = -1, bool keyRepeat = false) {
     if (app.paused || app.helpVisible || app.debugVisible || app.settingsVisible ||
         app.levelSelect || app.passwordVisible || app.mainMenuVisible ||
         app.game.outcome != chips::Outcome::playing)
         return;
 
-    if (app.levelPlacardVisible) {
-        app.levelPlacardVisible = false;
-        app.lastTick = SDL_GetTicks();
-    }
+    dismissLevelPlacard(app);
 
+    // The original input path stores one buffered direction and DoTick applies
+    // it on the next eligible simulation tick. Do not move Chip from
+    // the raw SDL key/controller event: doing so makes voluntary movement run
+    // at event-repeat rate and out of phase with force-floor movement.
     const int oldPosition = app.game.playerPosition;
-    const auto oldOutcome = app.game.outcome;
-    if (app.game.pressMove(direction) == chips::MoveResult::ignored) return;
-
-    const auto now = SDL_GetTicks();
-    if (app.game.playerPosition != oldPosition) {
-        app.playerAnimationFrom = oldPosition;
-        app.playerAnimationTo = app.game.playerPosition;
-        app.playerAnimationStart = now;
-        app.playerAnimationTeleported = app.game.playerTeleportedThisTick;
-    }
-
-    if (oldOutcome == chips::Outcome::playing && app.game.outcome != oldOutcome) {
-        app.audio.play(app.game.outcome == chips::Outcome::won
-            ? chips::AudioCue::victory : chips::AudioCue::death);
-    } else if (app.game.playerPosition != oldPosition) {
-        const auto pickupCue = app.game.playerPickupThisTick == chips::PickupKind::key
-            ? chips::AudioCue::keyPickup
-            : app.game.playerPickupThisTick == chips::PickupKind::boot ? chips::AudioCue::bootPickup
-            : chips::AudioCue::pickup;
-        app.audio.play(app.game.playerTeleportedThisTick ? chips::AudioCue::teleport
-            : app.game.switchActivatedThisTick ? chips::AudioCue::switchTile
-            : app.game.playerPickupThisTick != chips::PickupKind::none ? pickupCue
-            : chips::AudioCue::move);
-    } else {
-        app.audio.play(chips::AudioCue::blocked);
-    }
+    app.game.queueMove(direction);
+    constexpr std::array<const char*, 4> directions{"N", "E", "S", "W"};
+    const char* resultName = app.game.pendingDirection ? "QUEUED" : "IGNORED";
+    char scancodeLabel[8]{};
+    if (scancode < 0) std::snprintf(scancodeLabel, sizeof(scancodeLabel), "---");
+    else std::snprintf(scancodeLabel, sizeof(scancodeLabel), "%03d", scancode);
+    const char* buffered = app.game.pendingDirection
+        ? directions[static_cast<std::size_t>(*app.game.pendingDirection)] : "-";
+    char movementTrace[128]{};
+    std::snprintf(movementTrace, sizeof(movementTrace),
+        "INPUT %s SC%s R%u %s %02d,%02d>%02d,%02d %s BUF:%s",
+        inputSource, scancodeLabel, keyRepeat ? 1U : 0U,
+        directions[static_cast<std::size_t>(direction)],
+        oldPosition % chips::kBoardWidth, oldPosition / chips::kBoardWidth,
+        app.game.playerPosition % chips::kBoardWidth,
+        app.game.playerPosition / chips::kBoardWidth, resultName, buffered);
+    app.debugLastMovement = movementTrace;
+    appendDebugInputLog(app, movementTrace);
+    (void)oldPosition;
 }
 
 void openFirstGamepad(App& app) {
@@ -354,7 +375,6 @@ bool initialize(App& app) {
         SDL_Log("Unable to reserve a level-pack dialog event type: %s", SDL_GetError());
         app.levelPackDialogEventType = SDL_EVENT_USER;
     }
-    (void)app.audio.initialize();
     if (!SDL_CreateWindowAndRenderer("Chip's Challenge — Native Remake",
                                      1280, 820,
                                      SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY,
@@ -371,6 +391,12 @@ bool initialize(App& app) {
         SDL_Log("Unable to set minimum window size: %s", SDL_GetError());
     const auto* basePath = SDL_GetBasePath();
     const auto resourceRoot = pathFromUtf8(basePath ? basePath : "");
+    try {
+        app.debugInputLogPath = std::filesystem::temp_directory_path() / "chips-native-input-trace.log";
+    } catch (const std::filesystem::filesystem_error&) {
+        app.debugInputLogPath.clear();
+    }
+    (void)app.audio.initialize(resourceRoot);
     const auto iconPath = resourceRoot / "assets" / "art" / "app-icon-polished.png";
     const auto iconPathUtf8 = pathToUtf8(iconPath);
     SDL_Surface* iconSurface = SDL_LoadPNG(iconPathUtf8.c_str());
@@ -1046,8 +1072,7 @@ void handleGamepadButton(App& app, SDL_GamepadButton button) {
         return;
     }
     if (app.levelPlacardVisible && !app.mainMenuVisible) {
-        app.levelPlacardVisible = false;
-        app.lastTick = SDL_GetTicks();
+        dismissLevelPlacard(app);
     }
     if (app.bestTimesVisible && button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) {
         changeBestTimesPage(app, -1);
@@ -1172,9 +1197,20 @@ void run(App& app) {
             } else if (event.type == SDL_EVENT_TEXT_INPUT && app.passwordVisible) {
                 if (app.passwordInput.size() < 24) app.passwordInput += event.text.text;
             } else if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key != SDLK_F8 && event.key.key != SDLK_ESCAPE) {
+                    const char* keyName = SDL_GetKeyName(event.key.key);
+                    const char* scanName = SDL_GetScancodeName(event.key.scancode);
+                    char rawKeyTrace[80]{};
+                    std::snprintf(rawKeyTrace, sizeof(rawKeyTrace),
+                        "RAW K%s S%s/%03d R%u",
+                        keyName && keyName[0] ? keyName : "?",
+                        scanName && scanName[0] ? scanName : "?",
+                        static_cast<int>(event.key.scancode), event.key.repeat ? 1U : 0U);
+                    app.debugLastMovement = rawKeyTrace;
+                    appendDebugInputLog(app, rawKeyTrace);
+                }
                 if (app.levelPlacardVisible && !app.mainMenuVisible) {
-                    app.levelPlacardVisible = false;
-                    app.lastTick = SDL_GetTicks();
+                    dismissLevelPlacard(app);
                 }
                 if (app.topMenuOpen >= 0) {
                     const int itemCount = topMenuItemCount(app.topMenuOpen);
@@ -1332,7 +1368,8 @@ void run(App& app) {
                            !app.settingsVisible && !app.mainMenuVisible) {
                     const int direction = movementIndexForScancode(app, event.key.scancode);
                     if (direction >= 0) {
-                        movePlayer(app, static_cast<chips::Direction>(direction));
+                        movePlayer(app, static_cast<chips::Direction>(direction), "KEY",
+                                   static_cast<int>(event.key.scancode), event.key.repeat);
                         continue;
                     }
                 }
@@ -1521,8 +1558,7 @@ void run(App& app) {
                 }
             } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
                 if (app.levelPlacardVisible && !app.mainMenuVisible) {
-                    app.levelPlacardVisible = false;
-                    app.lastTick = SDL_GetTicks();
+                    dismissLevelPlacard(app);
                 }
                 app.lastMouseX = static_cast<int>(std::lround(event.button.x));
                 app.lastMouseY = static_cast<int>(std::lround(event.button.y));
@@ -1659,8 +1695,8 @@ void run(App& app) {
             app.levelPlacardVisible || app.passwordVisible || app.mainMenuVisible || app.levelPackDialogPending)
             app.lastTick = now;
         app.audio.update();
-        // The original board timer uses 110 ms while a level is active.
-        while (now - app.lastTick >= 110) {
+        // Keep gameplay on the selected fixed 95 ms cadence.
+        while (now - app.lastTick >= kSimulationTickMs) {
             if (!app.paused && !app.helpVisible && !app.debugVisible && !app.settingsVisible && !app.levelSelect &&
                 !app.levelPlacardVisible && !app.passwordVisible && !app.mainMenuVisible &&
                 !app.levelPackDialogPending) {
@@ -1670,10 +1706,37 @@ void run(App& app) {
                 for (const auto& creature : app.game.creatures)
                     oldCreaturePositions.push_back(creature.alive ? creature.position : -1);
                 const auto oldOutcome = app.game.outcome;
+                const auto queuedDirectionBeforeTick = app.game.pendingDirection;
+                const bool slidingBeforeTick = app.game.sliding;
+                const auto slideDirectionBeforeTick = app.game.slideDirection;
                 app.game.advanceTicks();
                 const bool playerAttempt = app.game.playerAttemptedThisTick;
+                const bool playerMoved = app.game.playerMovedThisTick;
+                if (playerAttempt) {
+                    constexpr std::array<const char*, 4> directions{"N", "E", "S", "W"};
+                    const char* requestedDirection = queuedDirectionBeforeTick
+                        ? directions[static_cast<std::size_t>(*queuedDirectionBeforeTick)]
+                        : slidingBeforeTick
+                            ? directions[static_cast<std::size_t>(slideDirectionBeforeTick)] : "AUTO";
+                    const char* resultName = app.game.outcome == chips::Outcome::won ? "WON"
+                        : app.game.outcome == chips::Outcome::dead ? "DIED"
+                        : app.game.outcome == chips::Outcome::timedOut ? "TIMEOUT"
+                        : playerMoved ? "MOVED" : "BLOCKED";
+                    char tickTrace[112]{};
+                    std::snprintf(tickTrace, sizeof(tickTrace),
+                        "TICK %u %s %02d,%02d>%02d,%02d %s",
+                        app.game.gameTicks, requestedDirection,
+                        oldPosition % chips::kBoardWidth, oldPosition / chips::kBoardWidth,
+                        app.game.playerPosition % chips::kBoardWidth,
+                        app.game.playerPosition / chips::kBoardWidth, resultName);
+                    app.debugLastTickMovement = tickTrace;
+                    appendDebugInputLog(app, tickTrace);
+                }
                 const bool playerTeleported = app.game.playerTeleportedThisTick;
                 const bool switchActivated = app.game.switchActivatedThisTick;
+                const bool doorOpened = app.game.doorOpenedThisTick;
+                const bool thiefActivated = app.game.thiefActivatedThisTick;
+                const bool splash = app.game.splashThisTick;
                 const auto pickup = app.game.playerPickupThisTick;
                 if (oldOutcome == chips::Outcome::playing &&
                     app.game.outcome == chips::Outcome::won &&
@@ -1697,25 +1760,32 @@ void run(App& app) {
                     }
                 }
                 if (oldOutcome == chips::Outcome::playing && app.game.outcome != oldOutcome) {
+                    if (splash) app.audio.play(chips::AudioCue::splash);
                     app.audio.play(app.game.outcome == chips::Outcome::won
-                        ? chips::AudioCue::victory : chips::AudioCue::death);
-                } else if (playerAttempt) {
-                    if (app.game.playerPosition != oldPosition) {
+                        ? chips::AudioCue::levelComplete : chips::AudioCue::death);
+                } else if (oldOutcome == chips::Outcome::playing && playerAttempt) {
+                    if (playerMoved) {
                         const auto pickupCue = pickup == chips::PickupKind::key
                             ? chips::AudioCue::keyPickup
                             : pickup == chips::PickupKind::boot ? chips::AudioCue::bootPickup
                             : chips::AudioCue::pickup;
-                        app.audio.play(playerTeleported ? chips::AudioCue::teleport
+                        const auto cue = playerTeleported ? chips::AudioCue::teleport
+                            : doorOpened ? chips::AudioCue::door
+                            : thiefActivated ? chips::AudioCue::thief
+                            : splash ? chips::AudioCue::splash
                             : switchActivated ? chips::AudioCue::switchTile
-                            : pickup != chips::PickupKind::none ? pickupCue : chips::AudioCue::move);
+                            : pickup != chips::PickupKind::none ? pickupCue : chips::AudioCue::move;
+                        app.audio.play(cue);
                     } else {
                         app.audio.play(chips::AudioCue::blocked);
                     }
-                } else if (switchActivated) {
+                } else if (oldOutcome == chips::Outcome::playing && splash) {
+                    app.audio.play(chips::AudioCue::splash);
+                } else if (oldOutcome == chips::Outcome::playing && switchActivated) {
                     app.audio.play(chips::AudioCue::switchTile);
                 }
             }
-            app.lastTick += 110;
+            app.lastTick += kSimulationTickMs;
         }
         recordLevelWin(app);
         draw(app);
@@ -1958,19 +2028,54 @@ int main(int argc, char** argv) {
 
     try {
         const auto* basePath = SDL_GetBasePath();
-        const std::filesystem::path packPath = argc >= 2
-            ? pathFromUtf8(argv[1])
-            : pathFromUtf8(basePath ? basePath : "") / "data" / "CHIPS.DAT";
+        std::filesystem::path packPath = pathFromUtf8(basePath ? basePath : "") /
+            "data" / "CHIPS.DAT";
+        bool customPackPath = false;
+        std::optional<std::array<int, 3>> debugStart;
+        for (int argument = 1; argument < argc;) {
+            const std::string option = argv[argument];
+            if (option == "--debug-start") {
+                if (argument + 3 >= argc || debugStart)
+                    throw std::invalid_argument(
+                        "Usage: chips-native [CHIPS.DAT] [--debug-start <level> <x> <y>]");
+                debugStart = std::array<int, 3>{std::stoi(argv[argument + 1]),
+                    std::stoi(argv[argument + 2]), std::stoi(argv[argument + 3])};
+                argument += 4;
+            } else if (!customPackPath && option.rfind("--", 0) != 0) {
+                packPath = pathFromUtf8(argv[argument++]);
+                customPackPath = true;
+            } else {
+                throw std::invalid_argument(
+                    "Usage: chips-native [CHIPS.DAT] [--debug-start <level> <x> <y>]");
+            }
+        }
         App app;
-        if (argc >= 2) app.profileFileName = customPackProfileFileName(packPath);
+        if (customPackPath) app.profileFileName = customPackProfileFileName(packPath);
         app.levels = chips::loadLevelPack(packPath);
         if (app.levels.empty()) throw chips::LevelPackError("Level pack contains no levels");
+        if (debugStart) {
+            if ((*debugStart)[1] < 0 || (*debugStart)[1] >= chips::kBoardWidth ||
+                (*debugStart)[2] < 0 || (*debugStart)[2] >= chips::kBoardHeight)
+                throw std::invalid_argument("Debug start coordinates must be within the 32x32 board.");
+            const auto found = std::find_if(app.levels.begin(), app.levels.end(),
+                [&](const chips::Level& level) { return level.number == (*debugStart)[0]; });
+            if (found == app.levels.end())
+                throw std::invalid_argument("Debug start level is not present in the loaded pack.");
+            app.levelIndex = static_cast<std::size_t>(found - app.levels.begin());
+        }
         if (!initialize(app)) return 1;
         // The original seeds its process-wide CRT generator once from the
         // platform's milliseconds-since-startup clock. The adapter uses the
         // matching Windows clock and a monotonic equivalent elsewhere.
         resetPlayer(app);
         loadCampaignProfile(app);
+        if (debugStart) {
+            app.game.playerPosition = (*debugStart)[2] * chips::kBoardWidth + (*debugStart)[1];
+            app.levelPlacardVisible = false;
+            app.mainMenuVisible = false;
+            app.debugAllowKeypadMovement = true;
+            app.lastTick = SDL_GetTicks();
+        }
         run(app);
         if (app.gamepad) SDL_CloseGamepad(app.gamepad);
         app.audio.shutdown();

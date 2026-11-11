@@ -49,6 +49,18 @@ set(CHIPS_RUNTIME_ASSETS
     assets/art/player-swim-poses-polished.png
     assets/art/creature-sprites-polished.png
     assets/art/key-boot-icons-polished.png
+    assets/audio/BLIP2.WAV
+    assets/audio/BUMMER.WAV
+    assets/audio/CHIP01.MID
+    assets/audio/CHIP02.MID
+    assets/audio/CLICK3.WAV
+    assets/audio/DITTY1.WAV
+    assets/audio/DOOR.WAV
+    assets/audio/OOF3.WAV
+    assets/audio/POP2.WAV
+    assets/audio/STRIKE.WAV
+    assets/audio/TELEPORT.WAV
+    assets/audio/WATER2.WAV
 )
 foreach(asset IN LISTS CHIPS_RUNTIME_ASSETS)
     get_filename_component(asset_directory "${asset}" DIRECTORY)
@@ -65,7 +77,7 @@ if(WIN32)
 endif()
 target_link_libraries(chips-native PRIVATE SDL3::SDL3)
 if(WIN32)
-    target_link_libraries(chips-native PRIVATE shell32)
+    target_link_libraries(chips-native PRIVATE shell32 winmm)
 endif()
 target_compile_features(chips-native PRIVATE cxx_std_20)
 if(MSVC)
@@ -174,14 +186,19 @@ add_test(NAME campaign-password-checks COMMAND chips-password-tests)
 add_executable(chips-audio-tests tests/audio_tests.cpp src/audio.cpp)
 target_include_directories(chips-audio-tests PRIVATE src)
 target_link_libraries(chips-audio-tests PRIVATE SDL3::SDL3)
+target_compile_definitions(chips-audio-tests PRIVATE
+    CHIPS_TEST_RESOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+if(WIN32)
+    target_link_libraries(chips-audio-tests PRIVATE winmm)
+endif()
 target_compile_features(chips-audio-tests PRIVATE cxx_std_20)
 if(MSVC)
     target_compile_options(chips-audio-tests PRIVATE /W4 /permissive-)
 else()
     target_compile_options(chips-audio-tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-add_test(NAME synthesized-audio-checks COMMAND chips-audio-tests)
-set_tests_properties(synthesized-audio-checks PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+add_test(NAME original-audio-checks COMMAND chips-audio-tests)
+set_tests_properties(original-audio-checks PROPERTIES ENVIRONMENT "SDL_AUDIODRIVER=dummy")
 
 add_executable(chips-campaign-validation
     tests/campaign_validation.cpp src/engine.cpp src/levelpack.cpp src/replay.cpp)

@@ -2,8 +2,14 @@
 
 #include <SDL3/SDL.h>
 
+#include <array>
+#include <filesystem>
+#include <cstddef>
+#include <vector>
+
 namespace chips {
-enum class AudioCue { move, blocked, pickup, keyPickup, bootPickup, switchTile, teleport, death, victory };
+enum class AudioCue { move, blocked, pickup, keyPickup, bootPickup, switchTile, teleport, death, levelComplete,
+                      door, thief, splash };
 
 class AudioSystem {
 public:
@@ -13,9 +19,11 @@ public:
     AudioSystem& operator=(const AudioSystem&) = delete;
 
     // Audio is optional: failure to open a playback device never prevents startup.
-    [[nodiscard]] bool initialize();
+    [[nodiscard]] bool initialize(const std::filesystem::path& resourceRoot);
     void shutdown();
     void play(AudioCue cue);
+    void startMusic(unsigned levelNumber);
+    void stopMusic();
     void update();
     void setVolume(float volume);
     void setMuted(bool muted);
@@ -26,17 +34,24 @@ public:
     [[nodiscard]] float musicVolume() const { return musicVolume_; }
     [[nodiscard]] bool musicMuted() const { return musicMuted_; }
     [[nodiscard]] bool available() const { return stream_ != nullptr; }
+    [[nodiscard]] std::size_t loadedCueCount() const;
 
 private:
     void updateGain();
     void updateMusicGain();
-    void queueMusic();
-    void disableMusic(const char* reason);
+    std::filesystem::path resourceRoot_;
+    std::array<std::vector<float>, 12> effects_{};
     SDL_AudioStream* stream_{};
-    SDL_AudioStream* musicStream_{};
     float volume_{0.65F};
     bool muted_{};
     float musicVolume_{0.20F};
     bool musicMuted_{};
+#ifdef _WIN32
+    bool midiOpen_{};
+    bool midiPlaying_{};
+    Uint64 nextMidiStatusCheck_{};
+    Uint64 midiTrackStartedAt_{};
+    Uint64 midiTrackLengthMs_{};
+#endif
 };
 }

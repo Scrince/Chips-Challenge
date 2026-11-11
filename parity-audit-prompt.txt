@@ -1,0 +1,89 @@
+CHIP'S CHALLENGE — ORIGINAL/NATIVE BEHAVIOR PARITY AUDIT PROMPT
+================================================================
+
+ROLE AND GOAL
+
+You are the game behavior auditor for this repository's fresh native remake. Determine, with reproducible evidence, where the native engine differs from the supplied original Chip's Challenge game. The intended result is an actionable adjustment list for every one of the 149 campaign levels, plus a reusable comparison method for future engine changes. Pay particular attention to keyboard input, input buffering/repeat, movement timing, timer cadence, game tick phase/order, creature scheduling, and tile/entity interactions.
+
+The original executable, original source/disassembly, level data, and captures were supplied for analysis. Work within that authorized project context. Do not turn this task into a licensing discussion. The shipped remake remains a fresh native implementation: do not use an emulator, compatibility layer, original executable, or disassembled code as runtime dependencies, and do not transplant legacy assembly into the engine.
+
+CORE RULE: EVIDENCE BEFORE ADJUSTMENT
+
+Do not call a behavior wrong merely because it looks surprising, because an old third-party simulator disagrees, or because the native code appears different. First compare the exact original and native scenario. Keep three concepts distinct:
+
+1. `MATCH`: the named behavior has paired original/native evidence and agrees.
+2. `ADJUST`: reproducible paired evidence establishes a difference; state the observed original behavior, native behavior, evidence, and the exact change/test needed.
+3. `NEEDS CAPTURE`: evidence is insufficient, ambiguous, or only code reading/native replay exists. Specify how to capture it.
+
+An absent mechanic is `N/A` for that level, not a pass. A level being winnable is not proof that all actions, timing, inputs, or edge cases match. Never invent observations. An unverified claim remains unverified.
+
+REPOSITORY AND AUTHORITATIVE INPUTS
+
+1. Inspect repository instructions (`AGENTS.md`), current source, tests, fixtures, build state, and git status before editing. Preserve unrelated working-tree changes.
+2. Use the canonical `data/CHIPS.DAT` and its decoded 149 records as the exact map source. Preserve both 32x32 layers, title, chip requirement, timer, password/hint, start, links and other metadata. Do not derive maps by tracing thumbnails.
+3. Read the supplied disassembly/source directly. At minimum inspect `constants.asm`, `movement.asm`, `logic.asm`, and keyboard/timing code such as `seg2.asm`; cite file and symbol/line references in findings. Check `sound.asm` when event sound is part of the interaction.
+4. Read `tests/fixtures/README.md`, `native-known-routes.json`, `level2-key-capture.json`, `scripts/replay_recorded_key_events.py`, and the current replay/engine tests. Existing `cc-speedrun` audits are mechanic inventories and route sources only; do not treat their simulator's current behavior or gap counts as ground truth for the native engine.
+5. Identify what the native application actually sends to the simulation: physical keydown/up, SDL repeat, queued/held directions, per-frame polling, pause, restart, menu transitions, and input-to-tick conversion. Record the configured tick duration and any phase/accumulator semantics from source, not from assumption.
+
+COMPARISON METHOD
+
+For each relevant scenario, record a paired trace with:
+
+- level number and exact source data hash;
+- executable/build identity and settings;
+- initial player position/facing, top and bottom tile layers, inventory, chips, timer, creature states, RNG conditions and global tick phase if knowable;
+- every keyboard event with monotonic timestamp, key-down/key-up, held duration and simultaneous keys; distinguish physical input edges from OS key repeat;
+- each simulation tick/turn and render-independent progression;
+- resulting player position/facing, both tile layers and mutations, inventory, chips, timer, creature positions/directions, death/win state and sound events;
+- uncertainties and capture method (human video, instrumented trace, replay, or disassembly inference).
+
+Use short boundary-focused cases as well as full routes: press just before/on/after a movement-ready tick; tap versus hold; key-up before the next turn; opposite-direction changes; two keys together; blocked movement; forced movement; modal/pause input; restart/load; timer at zero boundary; and a player action adjacent to a creature update. Replay the exact recorded trace in the native engine. Where original tick internals are not observable, compare timestamps and state outcomes across repeated captures and report the limit instead of fabricating an internal tick value.
+
+Random creature behavior must have a recorded original sequence/capture and native seed/state. Do not claim sequence parity from one unrelated seed. Test deterministic replay separately from matching the original RNG sequence.
+
+LEVEL-BY-LEVEL COVERAGE
+
+Generate and maintain a section for every level 001–149 from decoded `CHIPS.DAT`. For each level:
+
+- list its title, timer and chip requirement;
+- list mechanics present in either tile layer and relevant links/metadata;
+- include the input/timing/tick protocol even when the level contains only ordinary terrain;
+- give a concrete original/native capture or replay action for every present mechanic (e.g. collect a key then enter its door; push a block into water then step off and return; enter ice and change direction; activate a trap button and observe creature updates);
+- identify any exact mismatch as an `ADJUST` item with evidence, or mark remaining scenarios `NEEDS CAPTURE`;
+- avoid duplicating generic boilerplate where a shared capture can prove the same engine rule, but link each level to that evidence and still state its map-specific actions.
+
+Tile families to account for include: chips/socket/exit; colored keys/doors; water/fire/all boots; blocks and block directions; dirt/gravel; ice/corners; directional/random force floors; walls, hidden/fake/popup walls and directional panels; toggles/buttons; traps/tank controls; clone buttons/machines and links; teleporters; bombs; thieves; hints; and each creature type (bug, fireball, ball, tank, glider, teeth, walker, blob, paramecium). Also inspect interactions when two layers overlap and effects that alter a tile or entity after the first action.
+
+ARTIFACTS TO CREATE OR UPDATE
+
+1. `parity-audit-prompt.txt` — this reusable instruction for the ongoing parity audit.
+2. A reproducible campaign checklist at `docs/campaign-parity-actions.md`, with all 149 levels and evidence/status labels. Prefer generating it from the decoded canonical pack; keep the generator in `scripts/` and document its invocation. Include map-specific actions and universal input/tick capture requirements.
+3. A concise summary in the checklist (or a companion report) of confirmed mismatches, fixes needed, already verified cases, coverage gaps, and capture limitations. Include an evidence path for each claim.
+4. Only if the paired evidence clearly proves a small, in-scope engine defect and the change is safe, implement that focused correction and add/update a regression scenario. Otherwise leave code untouched and write a precise adjustment action. Do not perform speculative broad rewrites during the audit.
+
+REQUIRED KEYBOARD/TIMING AUDIT
+
+Explicitly determine and report:
+
+- whether direction is triggered on key-down, key-up, key repeat, held-state polling, or a combination;
+- repeat delay/rate and whether OS repeat messages are accepted or filtered;
+- whether input is buffered until the next player-ready tick, dropped while moving/forced, or overwritten by a later direction;
+- movement-ready cadence and tick phase at startup, restart, level change, pause/resume and after a win/death;
+- the ordering among player movement, forced terrain, blocks, buttons/links, monsters, timer decrement and terminal outcome;
+- behavior when movement and timer/monster updates coincide;
+- whether different render frame rates change simulation/input outcomes.
+
+Use the original disassembly and direct capture as separate evidence. An apparent `CurrentTick` parity gate in code is not enough to assume the UI delivers the same key events or starts with the same phase.
+
+ACCEPTANCE CRITERIA
+
+- The generated campaign report has exactly 149 level sections in source order and identifies the exact source pack used.
+- Every level has at least one explicit input/timing/game-tick action and has scenario actions for every mechanic present in its decoded map.
+- No `ADJUST` assertion lacks a paired reproducible comparison; all uncertain behavior stays `NEEDS CAPTURE`.
+- Existing routes are labeled with their actual evidence status. Native-only route wins are not described as original parity proof.
+- The report states test/replay commands that were actually run and their outcomes. Do not claim builds, original captures, or tests that were not performed.
+- Keep code changes focused, preserve user modifications, and finish with a concise summary of artifacts, confirmed findings, outstanding captures, and commands used.
+
+WORKING STYLE
+
+First inspect and report the project baseline and evidence sources. Then generate the full level checklist and perform the highest-value comparisons available from existing captures and source. Work incrementally. Use exact level/map state, timestamped input events and reproducible replays. When the original cannot be run or observed, make that a concrete capture task, not a guessed conclusion.

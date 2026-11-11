@@ -90,6 +90,10 @@ struct GameState {
     std::optional<Direction> pendingDirection;
     std::optional<int> mouseTargetPosition;
     bool playerAttemptedThisTick{};
+    // True if Chip traversed at least one tile during this tick. A forced
+    // floor can push Chip back onto the tile where the tick began, so the
+    // final position alone cannot distinguish that successful move from a wall.
+    bool playerMovedThisTick{};
     bool playerTeleportedThisTick{};
     // NewMonster records Eaten in the original autopsy field when a creature
     // starts over Chip; MonsterLoop reports that death after its first pass.
@@ -102,6 +106,9 @@ struct GameState {
     // Explicit switch/gate audio event; status messages may be overwritten by
     // later actions in the same tick and are not a reliable event channel.
     bool switchActivatedThisTick{};
+    bool doorOpenedThisTick{};
+    bool thiefActivatedThisTick{};
+    bool splashThisTick{};
     // Set only by a successful Chip, key, or boot tile action. Inventory
     // changes alone cannot distinguish pickups from thieves or door use.
     PickupKind playerPickupThisTick{PickupKind::none};
