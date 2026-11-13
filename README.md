@@ -16,7 +16,7 @@ The title menu provides separate **Continue Level** and **New Game (Level 1)** a
 
 Menus, prompts, help, and result dialogs use bundled Noto Sans rendered with antialiasing. Pixel-art sprites and the digital scoreboard remain pixel-based.
 
-The current Windows x64 V1.0.1 package is `dist/chips-native-windows-x64-Release.zip`, built with `scripts/build-windows.ps1`. It includes the game, runtime libraries, campaign data, art assets, Noto Sans, and the offline HTML help manual. SHA-256: `26707994E3F18BC6F112DB213F230471BB47930D9C954C27B4D796550AC4EA39`. See [`CHANGELOG.md`](CHANGELOG.md) for release changes. macOS/Linux builds remain unverified on this host.
+The current Windows x64 V1.0.1 package is `dist/chips-native-windows-x64-Release.zip`, built with `scripts/build-windows.ps1`. It includes the game, runtime libraries, campaign data, art assets, Noto Sans, and the offline HTML help manual. SHA-256: `16ADDF8B1FDCB528F5366BD42C0EB760FE2BF20D5C3D2161E3B85E3BC5C09A08`. See [`CHANGELOG.md`](CHANGELOG.md) for release changes. macOS/Linux builds remain unverified on this host.
 
 An active level pauses automatically when the window loses focus or is minimized. Explicit pause works from the keyboard, gamepad, or menu. Every pause discards movement waiting in the input buffer and clears controller repeat state; a stick or D-pad direction held through the pause is ignored until released. Play resumes only when the player chooses Resume or presses the pause control.
 

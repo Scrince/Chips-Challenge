@@ -88,7 +88,11 @@ endforeach()
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/data/CHIPS.DAT"
                "${CMAKE_CURRENT_BINARY_DIR}/data/CHIPS.DAT" COPYONLY)
 
-add_executable(chips-native src/main.cpp src/renderer.cpp src/input_mapping.cpp src/levelpack.cpp src/engine.cpp src/replay.cpp src/profile.cpp src/platform_file.cpp src/platform_command_line.cpp src/platform_clock.cpp src/audio.cpp src/password.cpp)
+if(WIN32)
+    add_executable(chips-native WIN32 src/main.cpp src/renderer.cpp src/input_mapping.cpp src/levelpack.cpp src/engine.cpp src/replay.cpp src/profile.cpp src/platform_file.cpp src/platform_command_line.cpp src/platform_clock.cpp src/audio.cpp src/password.cpp)
+else()
+    add_executable(chips-native src/main.cpp src/renderer.cpp src/input_mapping.cpp src/levelpack.cpp src/engine.cpp src/replay.cpp src/profile.cpp src/platform_file.cpp src/platform_command_line.cpp src/platform_clock.cpp src/audio.cpp src/password.cpp)
+endif()
 if(WIN32)
     target_sources(chips-native PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc")
 endif()
