@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdarg>
 #include <cstdint>
 #include <cmath>
@@ -38,7 +39,10 @@ using chips_native::uiScaleForOutput;
 constexpr std::size_t kLevelSelectorColumns = 13;
 constexpr std::size_t kLevelSelectorRows = 12;
 constexpr std::size_t kLevelSelectorPageSize = kLevelSelectorColumns * kLevelSelectorRows;
-constexpr Uint64 kSimulationTickMs = 95;
+constexpr Uint64 kSimulationTickMs = 110;
+constexpr Uint64 kPlayerMovementTickMs = 95;
+constexpr Uint64 kGamepadInitialRepeatMs = 280;
+constexpr Uint64 kGamepadRepeatMs = 170;
 
 std::string pathToUtf8(const std::filesystem::path& path) {
     const auto encoded = path.u8string();
@@ -107,7 +111,10 @@ void resetPlayer(App& app) {
 }
 
 void setPaused(App& app, bool paused) {
-    if (app.paused != paused) app.lastTick = SDL_GetTicks();
+    if (app.paused != paused) {
+        app.lastTick = SDL_GetTicks();
+        app.lastPlayerTick = app.lastTick;
+    }
     if (paused && !app.paused) {
         // A pause is a hard input boundary. Do not carry queued movement or a
         // held controller direction across Resume.
@@ -127,6 +134,9 @@ void setPaused(App& app, bool paused) {
         app.gamepadStickNextRepeat = 0;
         app.gamepadDpadDirection = -1;
         app.gamepadDpadNextRepeat = 0;
+        app.keyboardDirection = -1;
+        app.keyboardScancode = -1;
+        app.keyboardRepeatAt = 0;
     }
     app.paused = paused;
 }
@@ -136,12 +146,50 @@ void togglePause(App& app) {
 }
 
 void persistProfile(App& app, bool announce = true);
+void openGoToDialog(App& app);
+
+void openHelp(App& app, int topic) {
+    static constexpr std::array<const char*, 5> topicAnchors{
+        "TOPIC16", "TOPIC22", "TOPIC23", "HOWTOHELP", "TOPIC28"};
+    const int selected = std::clamp(topic, 0, 4);
+    const auto* basePath = SDL_GetBasePath();
+    const auto manualPath = pathFromUtf8(basePath ? basePath : "") /
+        "assets" / "help" / "chips-help.html";
+    if (!std::filesystem::exists(manualPath)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Help unavailable",
+            "The help file is missing. Restore assets/help/chips-help.html beside the game.",
+            app.window);
+        return;
+    }
+
+    std::string path = pathToUtf8(manualPath);
+    std::replace(path.begin(), path.end(), '\\', '/');
+    std::string url = "file://";
+    if (path.empty() || path.front() != '/') url.push_back('/');
+    for (const unsigned char byte : path) {
+        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+            (byte >= '0' && byte <= '9') || byte == '/' || byte == ':' ||
+            byte == '-' || byte == '_' || byte == '.' || byte == '~') {
+            url.push_back(static_cast<char>(byte));
+        } else {
+            std::array<char, 4> escaped{};
+            std::snprintf(escaped.data(), escaped.size(), "%%%02X", byte);
+            url += escaped.data();
+        }
+    }
+    url += '#';
+    url += topicAnchors[static_cast<std::size_t>(selected)];
+    if (!SDL_OpenURL(url.c_str()))
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Could not open help",
+                                 SDL_GetError(), app.window);
+}
 
 void dismissLevelPlacard(App& app) {
     if (!app.levelPlacardVisible || app.mainMenuVisible) return;
     app.levelPlacardVisible = false;
     app.audio.startMusic(static_cast<unsigned>(app.levelIndex + 1));
     app.lastTick = SDL_GetTicks();
+    app.lastPlayerTick = app.lastTick;
 }
 
 void selectLevel(App& app, std::size_t index) {
@@ -167,14 +215,12 @@ void requestLevelSelection(App& app, std::size_t index) {
         return;
     }
     app.selectedLevel = index;
-    app.passwordTargetLevel = index;
-    app.passwordReturnToLevelSelect = true;
-    app.passwordInput.clear();
-    app.passwordMessage = "PASSWORD REQUIRED FOR LEVEL " +
-        std::to_string(index + 1) + ". ESC CANCELS.";
     app.levelSelect = false;
-    app.passwordVisible = true;
-    (void)SDL_StartTextInput(app.window);
+    openGoToDialog(app);
+    app.goToLevelInput = std::to_string(index + 1);
+    app.goToPasswordFocus = true;
+    app.goToReturnToLevelSelect = true;
+    app.goToButtonSelection = -1;
 }
 
 void activateMenuSelection(App& app) {
@@ -194,18 +240,13 @@ void activateMenuSelection(App& app) {
             app.levelSelect = true;
             break;
         case 3:
-            app.passwordInput.clear();
-            app.passwordMessage.clear();
-            app.passwordTargetLevel = kNoPasswordTarget;
-            app.passwordReturnToLevelSelect = false;
-            app.passwordVisible = true;
-            (void)SDL_StartTextInput(app.window);
+            openGoToDialog(app);
             break;
         case 4:
             app.settingsVisible = true;
             app.waitingForBinding = -1;
             break;
-        case 5: app.helpVisible = true; break;
+        case 5: openHelp(app, 0); break;
         case 6: app.running = false; break;
         default: break;
     }
@@ -218,6 +259,73 @@ void closePasswordEntry(App& app) {
     app.passwordReturnToLevelSelect = false;
     if (returnToLevelSelect) app.levelSelect = true;
     (void)SDL_StopTextInput(app.window);
+}
+
+void openGoToDialog(App& app) {
+    app.goToLevelInput.clear();
+    app.goToPasswordInput.clear();
+    app.goToDialogMessage.clear();
+    app.goToPasswordFocus = false;
+    app.goToButtonSelection = 0;
+    app.goToReturnToLevelSelect = false;
+    app.goToDialogVisible = true;
+    (void)SDL_StartTextInput(app.window);
+}
+
+void closeGoToDialog(App& app) {
+    const bool returnToLevelSelect = app.goToReturnToLevelSelect;
+    app.goToDialogVisible = false;
+    app.goToReturnToLevelSelect = false;
+    app.goToLevelInput.clear();
+    app.goToPasswordInput.clear();
+    app.goToDialogMessage.clear();
+    if (returnToLevelSelect) app.levelSelect = true;
+    (void)SDL_StopTextInput(app.window);
+}
+
+void submitGoToDialog(App& app) {
+    std::optional<std::size_t> levelIndex;
+    if (app.goToLevelInput.empty()) {
+        if (!app.goToPasswordInput.empty())
+            levelIndex = chips::findLevelByPassword(app.goToPasswordInput, app.levels);
+    } else {
+        unsigned requestedLevel = 0;
+        const auto* begin = app.goToLevelInput.data();
+        const auto* end = begin + app.goToLevelInput.size();
+        const auto parsed = std::from_chars(begin, end, requestedLevel);
+        if (parsed.ec != std::errc{} || parsed.ptr != end || requestedLevel == 0 ||
+            requestedLevel > app.levels.size()) {
+            app.goToDialogMessage = "LEVEL NUMBER IS OUT OF RANGE.";
+            return;
+        }
+        const auto requestedIndex = static_cast<std::size_t>(requestedLevel - 1);
+        const auto& requested = app.levels[requestedIndex];
+        const bool requiresPassword = levelRequiresPassword(app, requestedIndex);
+        if (requiresPassword && app.goToPasswordInput.empty()) {
+            app.goToDialogMessage = "PASSWORD REQUIRED FOR THAT LEVEL.";
+            app.goToPasswordFocus = true;
+            return;
+        }
+        if (!app.goToPasswordInput.empty() && !requested.password.empty() &&
+            !chips::passwordMatches(app.goToPasswordInput, requested.password)) {
+            app.goToDialogMessage = "PASSWORD DOES NOT MATCH THAT LEVEL.";
+            app.goToPasswordFocus = true;
+            return;
+        }
+        levelIndex = requestedIndex;
+    }
+
+    if (!levelIndex) {
+        app.goToDialogMessage = "ENTER A VALID LEVEL NUMBER OR PASSWORD.";
+        app.goToPasswordFocus = app.goToLevelInput.empty();
+        return;
+    }
+    if (!app.goToPasswordInput.empty()) {
+        app.profile.highestUnlocked = static_cast<std::uint16_t>(std::max<std::size_t>(
+            app.profile.highestUnlocked, *levelIndex + 1));
+    }
+    closeGoToDialog(app);
+    selectLevel(app, *levelIndex);
 }
 
 void submitPassword(App& app) {
@@ -319,16 +427,14 @@ void handleBestTimesPointer(App& app, float windowX, float windowY) {
 void movePlayer(App& app, chips::Direction direction, const char* inputSource = "PAD",
                 int scancode = -1, bool keyRepeat = false) {
     if (app.paused || app.helpVisible || app.debugVisible || app.settingsVisible ||
-        app.levelSelect || app.passwordVisible || app.mainMenuVisible ||
+        app.levelSelect || app.passwordVisible || app.goToDialogVisible || app.mainMenuVisible ||
         app.game.outcome != chips::Outcome::playing)
         return;
 
     dismissLevelPlacard(app);
 
-    // The original input path stores one buffered direction and DoTick applies
-    // it on the next eligible simulation tick. Do not move Chip from
-    // the raw SDL key/controller event: doing so makes voluntary movement run
-    // at event-repeat rate and out of phase with force-floor movement.
+    // Input queues a direction for the independent 90 ms player cadence. The
+    // 110 ms world tick continues to own creature, block, and timer updates.
     const int oldPosition = app.game.playerPosition;
     app.game.queueMove(direction);
     constexpr std::array<const char*, 4> directions{"N", "E", "S", "W"};
@@ -349,6 +455,96 @@ void movePlayer(App& app, chips::Direction direction, const char* inputSource = 
     app.debugLastMovement = movementTrace;
     appendDebugInputLog(app, movementTrace);
     (void)oldPosition;
+}
+
+void advancePlayerClock(App& app, Uint64 now) {
+    const int oldPosition = app.game.playerPosition;
+    const auto oldOutcome = app.game.outcome;
+    const auto queuedDirection = app.game.pendingDirection;
+    const bool wasSliding = app.game.sliding;
+    const auto oldSlideDirection = app.game.slideDirection;
+    app.game.advancePlayerCadence();
+
+    const bool playerAttempt = app.game.playerAttemptedThisTick;
+    const bool playerMoved = app.game.playerMovedThisTick;
+    const bool playerTeleported = app.game.playerTeleportedThisTick;
+    const bool switchActivated = app.game.switchActivatedThisTick;
+    const bool doorOpened = app.game.doorOpenedThisTick;
+    const bool thiefActivated = app.game.thiefActivatedThisTick;
+    const bool splash = app.game.splashThisTick;
+    const auto pickup = app.game.playerPickupThisTick;
+
+    if (playerAttempt) {
+        constexpr std::array<const char*, 4> directions{"N", "E", "S", "W"};
+        const char* requestedDirection = queuedDirection
+            ? directions[static_cast<std::size_t>(*queuedDirection)]
+            : wasSliding ? directions[static_cast<std::size_t>(oldSlideDirection)] : "AUTO";
+        const char* resultName = app.game.outcome == chips::Outcome::won ? "WON"
+            : app.game.outcome == chips::Outcome::dead ? "DIED"
+            : app.game.outcome == chips::Outcome::timedOut ? "TIMEOUT"
+            : playerMoved ? "MOVED" : "BLOCKED";
+        char tickTrace[112]{};
+        std::snprintf(tickTrace, sizeof(tickTrace),
+            "PLAYER %llu %s %02d,%02d>%02d,%02d %s",
+            static_cast<unsigned long long>(now), requestedDirection,
+            oldPosition % chips::kBoardWidth, oldPosition / chips::kBoardWidth,
+            app.game.playerPosition % chips::kBoardWidth,
+            app.game.playerPosition / chips::kBoardWidth, resultName);
+        app.debugLastTickMovement = tickTrace;
+        appendDebugInputLog(app, tickTrace);
+    }
+
+    if (oldOutcome == chips::Outcome::playing &&
+        app.game.outcome == chips::Outcome::won &&
+        !app.levels.empty() && app.levelIndex + 1 >= app.levels.size())
+        app.actionSelection = 2;
+    if (app.game.playerPosition != oldPosition) {
+        app.playerAnimationFrom = oldPosition;
+        app.playerAnimationTo = app.game.playerPosition;
+        app.playerAnimationStart = now;
+        app.playerAnimationTeleported = playerTeleported;
+    }
+
+    if (thiefActivated) app.audio.play(chips::AudioCue::thief);
+
+    if (oldOutcome == chips::Outcome::playing && app.game.outcome != oldOutcome) {
+        if (splash) app.audio.play(chips::AudioCue::splash);
+        app.audio.play(app.game.outcome == chips::Outcome::won
+            ? chips::AudioCue::levelComplete : chips::AudioCue::death);
+    } else if (oldOutcome == chips::Outcome::playing && playerAttempt) {
+        if (playerMoved) {
+            const auto pickupCue = pickup == chips::PickupKind::key
+                ? chips::AudioCue::keyPickup
+                : pickup == chips::PickupKind::boot ? chips::AudioCue::bootPickup
+                : chips::AudioCue::pickup;
+            const auto cue = playerTeleported ? chips::AudioCue::teleport
+                : doorOpened ? chips::AudioCue::door
+                : splash ? chips::AudioCue::splash
+                : switchActivated ? chips::AudioCue::switchTile
+                : pickup != chips::PickupKind::none ? pickupCue : chips::AudioCue::move;
+            if (!thiefActivated) app.audio.play(cue);
+        } else {
+            app.audio.play(chips::AudioCue::blocked);
+        }
+    } else if (oldOutcome == chips::Outcome::playing && splash) {
+        app.audio.play(chips::AudioCue::splash);
+    } else if (oldOutcome == chips::Outcome::playing && switchActivated) {
+        app.audio.play(chips::AudioCue::switchTile);
+    }
+}
+
+void advancePlayerClockUntil(App& app, Uint64 deadline) {
+    while (app.lastPlayerTick + kPlayerMovementTickMs <= deadline) {
+        app.lastPlayerTick += kPlayerMovementTickMs;
+        const auto playerTickAt = app.lastPlayerTick;
+        if (app.keyboardDirection >= 0 && app.keyboardScancode >= 0 &&
+            playerTickAt >= app.keyboardRepeatAt) {
+            movePlayer(app, static_cast<chips::Direction>(app.keyboardDirection), "KEY_REPEAT",
+                       app.keyboardScancode, true);
+            app.keyboardRepeatAt = playerTickAt + kPlayerMovementTickMs;
+        }
+        advancePlayerClock(app, playerTickAt);
+    }
 }
 
 void openFirstGamepad(App& app) {
@@ -391,20 +587,24 @@ bool initialize(App& app) {
         SDL_Log("Unable to set minimum window size: %s", SDL_GetError());
     const auto* basePath = SDL_GetBasePath();
     const auto resourceRoot = pathFromUtf8(basePath ? basePath : "");
+    const auto fontPath = resourceRoot / "assets" / "fonts" / "NotoSans.ttf";
+    const auto fontPathUtf8 = pathToUtf8(fontPath);
+    if (!chips_native::initializeTextRendering(app.renderer, fontPathUtf8.c_str()))
+        SDL_Log("Unable to initialize Noto Sans UI text; using bitmap fallback: %s", SDL_GetError());
     try {
         app.debugInputLogPath = std::filesystem::temp_directory_path() / "chips-native-input-trace.log";
     } catch (const std::filesystem::filesystem_error&) {
         app.debugInputLogPath.clear();
     }
     (void)app.audio.initialize(resourceRoot);
-    const auto iconPath = resourceRoot / "assets" / "art" / "app-icon-polished.png";
+    const auto iconPath = resourceRoot / "assets" / "art" / "app-icon.png";
     const auto iconPathUtf8 = pathToUtf8(iconPath);
     SDL_Surface* iconSurface = SDL_LoadPNG(iconPathUtf8.c_str());
     if (iconSurface) {
         SDL_SetWindowIcon(app.window, iconSurface);
         app.appIcon = SDL_CreateTextureFromSurface(app.renderer, iconSurface);
         SDL_DestroySurface(iconSurface);
-        if (!app.appIcon) SDL_Log("Unable to create polished app icon texture: %s", SDL_GetError());
+        if (!app.appIcon) SDL_Log("Unable to create app icon texture: %s", SDL_GetError());
         else {
             SDL_SetTextureScaleMode(app.appIcon, SDL_SCALEMODE_NEAREST);
             SDL_SetTextureBlendMode(app.appIcon, SDL_BLENDMODE_BLEND);
@@ -426,6 +626,22 @@ bool initialize(App& app) {
         } else {
             SDL_SetTextureScaleMode(app.menuBackground, SDL_SCALEMODE_NEAREST);
             SDL_SetTextureBlendMode(app.menuBackground, SDL_BLENDMODE_BLEND);
+        }
+    }
+    const auto gameBackgroundPath = resourceRoot / "assets" / "art" / "menu-background-hd.png";
+    const auto gameBackgroundPathUtf8 = pathToUtf8(gameBackgroundPath);
+    SDL_Surface* gameBackgroundSurface = SDL_LoadPNG(gameBackgroundPathUtf8.c_str());
+    if (!gameBackgroundSurface) {
+        SDL_Log("Unable to load high-resolution game background %s: %s",
+                gameBackgroundPathUtf8.c_str(), SDL_GetError());
+    } else {
+        app.gameBackground = SDL_CreateTextureFromSurface(app.renderer, gameBackgroundSurface);
+        SDL_DestroySurface(gameBackgroundSurface);
+        if (!app.gameBackground) {
+            SDL_Log("Unable to create high-resolution game background texture: %s", SDL_GetError());
+        } else {
+            SDL_SetTextureScaleMode(app.gameBackground, SDL_SCALEMODE_LINEAR);
+            SDL_SetTextureBlendMode(app.gameBackground, SDL_BLENDMODE_BLEND);
         }
     }
     const auto victoryIllustrationPath = resourceRoot / "assets" / "art" / "victory-illustration.png";
@@ -517,6 +733,7 @@ bool initialize(App& app) {
         }
     }
     app.lastTick = SDL_GetTicks();
+    app.lastPlayerTick = app.lastTick;
     return true;
 }
 
@@ -598,6 +815,7 @@ void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath) {
     app.settingsVisible = false;
     app.levelSelect = false;
     app.passwordVisible = false;
+    app.goToDialogVisible = false;
     app.winRecorded = false;
     app.playerAnimationFrom = -1;
     app.playerAnimationTo = -1;
@@ -607,6 +825,7 @@ void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath) {
     if (app.profileMessage.empty())
         app.profileMessage = "Loaded level pack (" + std::to_string(app.levels.size()) + " levels).";
     app.lastTick = SDL_GetTicks();
+    app.lastPlayerTick = app.lastTick;
 }
 
 void SDLCALL levelPackDialogCallback(void* userdata, const char* const* filelist, int) {
@@ -642,6 +861,7 @@ void requestLevelPackOpen(App& app) {
     app.levelPackDialogPending = true;
     app.exitAfterFileDialog = false;
     app.lastTick = SDL_GetTicks();
+    app.lastPlayerTick = app.lastTick;
     SDL_ShowOpenFileDialog(levelPackDialogCallback, &app, app.window,
                            filters.data(), static_cast<int>(filters.size()), nullptr, false);
 }
@@ -710,6 +930,11 @@ void handleLevelSelectClick(App& app, float windowX, float windowY) {
     const auto grid = levelGridLayout(outputWidth, outputHeight);
     const auto pageStart = (app.selectedLevel / kLevelSelectorPageSize) * kLevelSelectorPageSize;
     const auto pageCount = (app.levels.size() + kLevelSelectorPageSize - 1) / kLevelSelectorPageSize;
+    if (x >= grid.exitButton.x && x < grid.exitButton.x + grid.exitButton.w &&
+        y >= grid.exitButton.y && y < grid.exitButton.y + grid.exitButton.h) {
+        app.levelSelect = false;
+        return;
+    }
     if (pageCount > 1) {
         if (x >= grid.previousPageButton.x && x < grid.previousPageButton.x + grid.previousPageButton.w &&
             y >= grid.previousPageButton.y && y < grid.previousPageButton.y + grid.previousPageButton.h) {
@@ -744,14 +969,15 @@ void handleMainMenuPointer(App& app, float windowX, float windowY, bool activate
     const float y = windowY * static_cast<float>(physicalHeight) /
                     static_cast<float>(windowHeight) / uiScale;
     const float panelWidth = std::min(520.0F, static_cast<float>(outputWidth) - 40.0F);
-    const float panelHeight = 356.0F;
+    const float panelHeight = kMainMenuPanelHeight;
     const float panelLeft = (static_cast<float>(outputWidth) - panelWidth) * 0.5F;
     const float panelTop = (static_cast<float>(outputHeight) - panelHeight) * 0.5F;
     if (x < panelLeft + 20.0F || x >= panelLeft + panelWidth - 20.0F) return;
 
     for (std::size_t i = 0; i < 7; ++i) {
-        const float rowTop = panelTop + 100.0F + static_cast<float>(i) * 32.0F - 5.0F;
-        if (y >= rowTop && y < rowTop + 28.0F) {
+        const float rowTop = panelTop + kMainMenuFirstItemY +
+            static_cast<float>(i) * kMainMenuItemRowStep + kMainMenuSelectionOffsetY;
+        if (y >= rowTop && y < rowTop + kMainMenuSelectionHeight) {
             app.menuSelection = i;
             if (activate) activateMenuSelection(app);
             return;
@@ -829,6 +1055,52 @@ void handleSettingsPointer(App& app, float windowX, float windowY) {
     }
 }
 
+void handleGoToDialogPointer(App& app, float windowX, float windowY, bool activate) {
+    int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
+    SDL_GetCurrentRenderOutputSize(app.renderer, &physicalWidth, &physicalHeight);
+    SDL_GetWindowSize(app.window, &windowWidth, &windowHeight);
+    if (windowWidth <= 0 || windowHeight <= 0) return;
+    const float scale = uiScaleForOutput(physicalWidth, physicalHeight, app.profile.uiScalePercent);
+    const float x = windowX * static_cast<float>(physicalWidth) /
+                    static_cast<float>(windowWidth) / scale;
+    const float y = windowY * static_cast<float>(physicalHeight) /
+                    static_cast<float>(windowHeight) / scale;
+    const float outputWidth = static_cast<float>(physicalWidth) / scale;
+    const float outputHeight = static_cast<float>(physicalHeight) / scale;
+    const float panelLeft = (outputWidth - std::min(600.0F, outputWidth - 40.0F)) * 0.5F;
+    const float panelTop = (outputHeight - 326.0F) * 0.5F;
+    const float fieldX = (std::min(600.0F, outputWidth - 40.0F) - kGoToFieldWidth) * 0.5F;
+    const SDL_FRect levelBox{panelLeft + fieldX, panelTop + 111.0F, kGoToFieldWidth, kGoToFieldHeight};
+    const SDL_FRect passwordBox{panelLeft + fieldX, panelTop + 166.0F, kGoToFieldWidth, kGoToFieldHeight};
+    const SDL_FRect okButton{panelLeft + 190.0F, panelTop + 263.0F, 96.0F, 38.0F};
+    const SDL_FRect cancelButton{panelLeft + 316.0F, panelTop + 263.0F, 112.0F, 38.0F};
+    const auto inside = [x, y](const SDL_FRect& bounds) {
+        return x >= bounds.x && x < bounds.x + bounds.w &&
+               y >= bounds.y && y < bounds.y + bounds.h;
+    };
+    if (inside(levelBox)) {
+        if (activate) {
+            app.goToPasswordFocus = false;
+            app.goToDialogMessage.clear();
+            app.goToButtonSelection = -1;
+        }
+    } else if (inside(passwordBox)) {
+        if (activate) {
+            app.goToPasswordFocus = true;
+            app.goToDialogMessage.clear();
+            app.goToButtonSelection = -1;
+        }
+    } else if (inside(okButton)) {
+        app.goToButtonSelection = 0;
+        if (activate) submitGoToDialog(app);
+    } else if (inside(cancelButton)) {
+        app.goToButtonSelection = 1;
+        if (activate) closeGoToDialog(app);
+    } else if (!activate) {
+        app.goToButtonSelection = -1;
+    }
+}
+
 bool pauseActionsVisible(const App& app) {
     return app.paused && !app.helpVisible && !app.settingsVisible && !app.bestTimesVisible;
 }
@@ -850,7 +1122,7 @@ void activatePauseAction(App& app, std::size_t selection) {
         resetPlayer(app);
         setPaused(app, false);
     } else if (selection == 2) {
-        app.helpVisible = true;
+        openHelp(app, 1);
     }
 }
 
@@ -907,8 +1179,84 @@ void handlePauseAndResultPointer(App& app, float windowX, float windowY, bool ac
     }
 }
 
+bool handleDialogExitClick(App& app, float windowX, float windowY) {
+    int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
+    SDL_GetCurrentRenderOutputSize(app.renderer, &physicalWidth, &physicalHeight);
+    SDL_GetWindowSize(app.window, &windowWidth, &windowHeight);
+    if (windowWidth <= 0 || windowHeight <= 0) return false;
+    const float scale = uiScaleForOutput(physicalWidth, physicalHeight, app.profile.uiScalePercent);
+    const int outputWidth = std::max(1, static_cast<int>(static_cast<float>(physicalWidth) / scale));
+    const int outputHeight = std::max(1, static_cast<int>(static_cast<float>(physicalHeight) / scale));
+    const float x = windowX * static_cast<float>(physicalWidth) / static_cast<float>(windowWidth) / scale;
+    const float y = windowY * static_cast<float>(physicalHeight) / static_cast<float>(windowHeight) / scale;
+    SDL_FRect closeButton{};
+    bool hasCloseButton = true;
+    if (app.levelSelect) {
+        closeButton = levelGridLayout(outputWidth, outputHeight).exitButton;
+    } else if (app.settingsVisible) {
+        const auto layout = settingsOverlayLayout(outputWidth, outputHeight);
+        closeButton = chips_native::dialogExitButton(layout.left, layout.top, layout.width);
+    } else if (app.bestTimesVisible) {
+        closeButton = bestTimesOverlayLayout(outputWidth, outputHeight).exitButton;
+    } else if (app.goToDialogVisible) {
+        const float width = std::min(600.0F, static_cast<float>(outputWidth) - 40.0F);
+        closeButton = chips_native::dialogExitButton((static_cast<float>(outputWidth) - width) * 0.5F,
+            (static_cast<float>(outputHeight) - 326.0F) * 0.5F, width);
+    } else if (app.helpVisible) {
+        const float width = std::min(520.0F, static_cast<float>(outputWidth) - 40.0F);
+        closeButton = chips_native::dialogExitButton((static_cast<float>(outputWidth) - width) * 0.5F,
+            (static_cast<float>(outputHeight) - 440.0F) * 0.5F, width);
+    } else if (app.passwordVisible) {
+        const float width = std::min(520.0F, static_cast<float>(outputWidth) - 40.0F);
+        closeButton = chips_native::dialogExitButton((static_cast<float>(outputWidth) - width) * 0.5F,
+            (static_cast<float>(outputHeight) - 220.0F) * 0.5F, width);
+    } else if (app.debugVisible) {
+        float height = 190.0F;
+        const auto creatureRows = std::min<std::size_t>(4, app.game.creatures.size());
+        const auto slipRows = std::min<std::size_t>(4, app.game.slipOrder.size());
+        if (creatureRows != 0)
+            height = std::max(height, 214.0F + static_cast<float>(creatureRows - 1) * 18.0F + 30.0F);
+        if (slipRows != 0)
+            height = std::max(height, 296.0F + static_cast<float>(slipRows - 1) * 18.0F + 30.0F);
+        if (app.game.creatures.size() > creatureRows || app.game.slipOrder.size() > slipRows)
+            height = std::max(height, 408.0F);
+        const float width = std::min(640.0F, static_cast<float>(outputWidth) - 40.0F);
+        closeButton = chips_native::dialogExitButton((static_cast<float>(outputWidth) - width) * 0.5F,
+            (static_cast<float>(outputHeight) - height) * 0.5F, width);
+    } else if (pauseActionsVisible(app)) {
+        closeButton = chips_native::pauseOverlayLayout(outputWidth, outputHeight).exitButton;
+    } else if (resultActionsVisible(app)) {
+        closeButton = chips_native::resultOverlayLayout(outputWidth, outputHeight,
+            app.game.outcome == chips::Outcome::won).exitButton;
+    } else {
+        hasCloseButton = false;
+    }
+    if (!hasCloseButton || x < closeButton.x || x >= closeButton.x + closeButton.w ||
+        y < closeButton.y || y >= closeButton.y + closeButton.h)
+        return false;
+
+    if (app.levelSelect) app.levelSelect = false;
+    else if (app.settingsVisible) {
+        app.waitingForBinding = -1;
+        app.settingsVisible = false;
+    } else if (app.bestTimesVisible) app.bestTimesVisible = false;
+    else if (app.goToDialogVisible) closeGoToDialog(app);
+    else if (app.helpVisible) app.helpVisible = false;
+    else if (app.passwordVisible) closePasswordEntry(app);
+    else if (app.debugVisible) app.debugVisible = false;
+    else if (pauseActionsVisible(app)) setPaused(app, false);
+    else if (resultActionsVisible(app)) {
+        app.mainMenuVisible = true;
+        app.menuSelection = 0;
+    }
+    return true;
+}
+
 void activateTopMenuItem(App& app, int menu, int row) {
     if (menu < 0 || menu > 3 || row < 0 || row >= topMenuItemCount(menu)) return;
+    // The Color entry mirrors the original menu's checked, always-color mode.
+    // This renderer has no monochrome mode, so leave the menu open and unchanged.
+    if (menu == 1 && row == 2) return;
     app.topMenuOpen = -1;
     app.topMenuSelection = -1;
     app.levelSelect = false;
@@ -916,6 +1264,7 @@ void activateTopMenuItem(App& app, int menu, int row) {
     app.bestTimesVisible = false;
     app.settingsVisible = false;
     app.passwordVisible = false;
+    app.goToDialogVisible = false;
     if (menu == 0) {
         if (row == 0) {
             app.paused = false;
@@ -933,30 +1282,44 @@ void activateTopMenuItem(App& app, int menu, int row) {
             app.running = false;
         }
     } else if (menu == 1) {
-        app.mainMenuVisible = false;
-        app.settingsVisible = true;
+        if (row == 0) {
+            app.profile.musicMuted = !app.profile.musicMuted;
+            app.audio.setMusicMuted(app.profile.musicMuted);
+            persistProfile(app);
+        } else if (row == 1) {
+            app.profile.effectsMuted = !app.profile.effectsMuted;
+            app.audio.setMuted(app.profile.effectsMuted);
+            persistProfile(app);
+        } else {
+            app.mainMenuVisible = false;
+            app.settingsVisible = true;
+        }
     } else if (menu == 2) {
         app.mainMenuVisible = false;
         if (row == 0) {
+            ++app.levelRestartCount;
+            resetPlayer(app);
+            app.paused = false;
+        } else if (row == 1) {
+            changeLevel(app, 1);
+        } else if (row == 2) {
+            changeLevel(app, -1);
+        } else if (row == 3) {
+            openGoToDialog(app);
+        } else if (row == 4) {
+            requestLevelPackOpen(app);
+        } else if (row == 5) {
             app.levelSelect = true;
             app.selectedLevel = app.levelIndex;
-        } else if (row == 1) {
-            app.passwordVisible = true;
-            app.passwordInput.clear();
-            app.passwordMessage.clear();
-            (void)SDL_StartTextInput(app.window);
-        } else {
-            requestLevelPackOpen(app);
         }
     } else {
-        app.mainMenuVisible = false;
-        app.helpVisible = true;
+        openHelp(app, row);
     }
 }
 
 void handleGamepadDirection(App& app, chips::Direction direction) {
     if (app.debugVisible || app.levelPackDialogPending) return;
-    if (app.passwordVisible || app.bestTimesVisible) return;
+    if (app.passwordVisible || app.goToDialogVisible || app.bestTimesVisible) return;
     if (app.mainMenuVisible && !app.helpVisible && !app.settingsVisible && !app.levelSelect) {
         if (direction == chips::Direction::north)
             app.menuSelection = (app.menuSelection + 6) % 7;
@@ -1050,7 +1413,7 @@ void handleGamepadAxis(App& app, SDL_GamepadAxis axis) {
     if (direction < 0 || direction == app.gamepadStickDirection) return;
     app.gamepadStickDirection = direction;
     handleGamepadDirection(app, static_cast<chips::Direction>(direction));
-    app.gamepadStickNextRepeat = SDL_GetTicks() + 300;
+    app.gamepadStickNextRepeat = SDL_GetTicks() + kGamepadInitialRepeatMs;
 }
 
 int heldGamepadDpadDirection(SDL_Gamepad* gamepad) {
@@ -1069,6 +1432,11 @@ int heldGamepadDpadDirection(SDL_Gamepad* gamepad) {
 void handleGamepadButton(App& app, SDL_GamepadButton button) {
     if (app.debugVisible) {
         if (button == SDL_GAMEPAD_BUTTON_EAST) app.debugVisible = false;
+        return;
+    }
+    if (app.goToDialogVisible) {
+        if (button == SDL_GAMEPAD_BUTTON_SOUTH) submitGoToDialog(app);
+        else if (button == SDL_GAMEPAD_BUTTON_EAST) closeGoToDialog(app);
         return;
     }
     if (app.levelPlacardVisible && !app.mainMenuVisible) {
@@ -1111,6 +1479,7 @@ void handleGamepadButton(App& app, SDL_GamepadButton button) {
     }
     if (button == SDL_GAMEPAD_BUTTON_EAST) {
         if (app.bestTimesVisible) app.bestTimesVisible = false;
+        else if (app.goToDialogVisible) closeGoToDialog(app);
         else if (app.passwordVisible) closePasswordEntry(app);
         else if (app.helpVisible) app.helpVisible = false;
         else if (app.levelSelect) app.levelSelect = false;
@@ -1149,6 +1518,7 @@ void run(App& app) {
                 }
                 SDL_free(result);
                 app.lastTick = SDL_GetTicks();
+                app.lastPlayerTick = app.lastTick;
                 if (app.exitAfterFileDialog) app.running = false;
                 continue;
             }
@@ -1177,7 +1547,7 @@ void run(App& app) {
                 // only after an explicit player action.
                 if (!app.mainMenuVisible && !app.paused && !app.helpVisible &&
                     !app.bestTimesVisible && !app.settingsVisible && !app.levelSelect &&
-                    !app.passwordVisible)
+                    !app.passwordVisible && !app.goToDialogVisible)
                     setPaused(app, true);
                 app.topMenuOpen = -1;
                 app.topMenuSelection = -1;
@@ -1193,9 +1563,38 @@ void run(App& app) {
                 app.gamepadDpadNextRepeat = 0;
                 app.gamepadDpadIgnoreHeld = heldGamepadDpadDirection(app.gamepad) >= 0;
                 app.game.pendingDirection.reset();
+                app.keyboardDirection = -1;
+                app.keyboardScancode = -1;
+                app.keyboardRepeatAt = 0;
                 app.lastTick = SDL_GetTicks();
+                app.lastPlayerTick = app.lastTick;
+            } else if (event.type == SDL_EVENT_TEXT_INPUT && app.goToDialogVisible) {
+                if (app.goToPasswordFocus) {
+                    for (const char* character = event.text.text; *character; ++character) {
+                        if (app.goToPasswordInput.size() >= kGoToInputMaxLength) break;
+                        app.goToPasswordInput.push_back(*character);
+                    }
+                } else {
+                    for (const char* character = event.text.text; *character; ++character) {
+                        if (*character >= '0' && *character <= '9' &&
+                            app.goToLevelInput.size() < kGoToInputMaxLength) {
+                            app.goToLevelInput.push_back(*character);
+                        } else if (app.goToLevelInput.empty() &&
+                                   app.goToPasswordInput.size() < kGoToInputMaxLength) {
+                            app.goToPasswordFocus = true;
+                            app.goToPasswordInput.push_back(*character);
+                        }
+                    }
+                }
+                app.goToDialogMessage.clear();
             } else if (event.type == SDL_EVENT_TEXT_INPUT && app.passwordVisible) {
                 if (app.passwordInput.size() < 24) app.passwordInput += event.text.text;
+            } else if (event.type == SDL_EVENT_KEY_UP) {
+                if (static_cast<int>(event.key.scancode) == app.keyboardScancode) {
+                    app.keyboardDirection = -1;
+                    app.keyboardScancode = -1;
+                    app.keyboardRepeatAt = 0;
+                }
             } else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key != SDLK_F8 && event.key.key != SDLK_ESCAPE) {
                     const char* keyName = SDL_GetKeyName(event.key.key);
@@ -1211,6 +1610,25 @@ void run(App& app) {
                 }
                 if (app.levelPlacardVisible && !app.mainMenuVisible) {
                     dismissLevelPlacard(app);
+                }
+                if (app.topMenuOpen < 0 && !event.key.repeat &&
+                    (event.key.mod & SDL_KMOD_CTRL) != 0 &&
+                    !app.paused && !app.helpVisible && !app.settingsVisible &&
+                    !app.levelSelect && !app.mainMenuVisible && !app.passwordVisible &&
+                    !app.goToDialogVisible) {
+                    if (event.key.key == SDLK_R) {
+                        ++app.levelRestartCount;
+                        resetPlayer(app);
+                        continue;
+                    }
+                    if (event.key.key == SDLK_N) {
+                        changeLevel(app, 1);
+                        continue;
+                    }
+                    if (event.key.key == SDLK_P) {
+                        changeLevel(app, -1);
+                        continue;
+                    }
                 }
                 if (app.topMenuOpen >= 0) {
                     const int itemCount = topMenuItemCount(app.topMenuOpen);
@@ -1236,6 +1654,10 @@ void run(App& app) {
                         focusKeyboardMenu();
                         app.topMenuOpen = (app.topMenuOpen + (event.key.key == SDLK_LEFT ? 3 : 1)) % 4;
                         app.topMenuSelection = -1;
+                    } else if (event.key.key == SDLK_F1 && !event.key.repeat) {
+                        app.topMenuOpen = -1;
+                        app.topMenuSelection = -1;
+                        openHelp(app, 0);
                     } else if ((event.key.key == SDLK_RETURN || event.key.key == SDLK_SPACE) &&
                                !event.key.repeat) {
                         activateTopMenuItem(app, app.topMenuOpen,
@@ -1252,6 +1674,17 @@ void run(App& app) {
                         changeBestTimesPage(app, -1);
                     else if (event.key.key == SDLK_PAGEDOWN || event.key.key == SDLK_RIGHT)
                         changeBestTimesPage(app, 1);
+                    continue;
+                }
+                if (app.goToDialogVisible) {
+                    if (event.key.key == SDLK_ESCAPE) closeGoToDialog(app);
+                    else if (event.key.key == SDLK_TAB) app.goToPasswordFocus = !app.goToPasswordFocus;
+                    else if (event.key.key == SDLK_BACKSPACE) {
+                        auto& input = app.goToPasswordFocus ? app.goToPasswordInput : app.goToLevelInput;
+                        if (!input.empty()) input.pop_back();
+                        app.goToDialogMessage.clear();
+                    } else if (event.key.key == SDLK_RETURN && !event.key.repeat)
+                        submitGoToDialog(app);
                     continue;
                 }
                 if (app.passwordVisible) {
@@ -1368,8 +1801,13 @@ void run(App& app) {
                            !app.settingsVisible && !app.mainMenuVisible) {
                     const int direction = movementIndexForScancode(app, event.key.scancode);
                     if (direction >= 0) {
-                        movePlayer(app, static_cast<chips::Direction>(direction), "KEY",
-                                   static_cast<int>(event.key.scancode), event.key.repeat);
+                        if (!event.key.repeat) {
+                            app.keyboardDirection = direction;
+                            app.keyboardScancode = static_cast<int>(event.key.scancode);
+                            app.keyboardRepeatAt = SDL_GetTicks() + kPlayerMovementTickMs;
+                            movePlayer(app, static_cast<chips::Direction>(direction), "KEY",
+                                       app.keyboardScancode, false);
+                        }
                         continue;
                     }
                 }
@@ -1396,7 +1834,7 @@ void run(App& app) {
                     case SDLK_F1:
                         if (app.settingsVisible) break;
                         app.levelSelect = false;
-                        app.helpVisible = !app.helpVisible;
+                        openHelp(app, 0);
                         break;
                     case SDLK_F2: case SDLK_F3: case SDLK_F4: case SDLK_F5:
                         if (app.settingsVisible) {
@@ -1421,7 +1859,8 @@ void run(App& app) {
                     case SDLK_F8:
                         if (!event.key.repeat && !app.paused && !app.helpVisible &&
                             !app.bestTimesVisible && !app.settingsVisible && !app.levelSelect &&
-                            !app.mainMenuVisible && !app.passwordVisible && app.topMenuOpen < 0)
+                            !app.mainMenuVisible && !app.passwordVisible && !app.goToDialogVisible &&
+                            app.topMenuOpen < 0)
                             app.debugVisible = true;
                         break;
                     case SDLK_PAGEUP: case SDLK_PAGEDOWN:
@@ -1509,13 +1948,18 @@ void run(App& app) {
                 const bool pointerMoved = mouseX != app.lastMouseX || mouseY != app.lastMouseY;
                 app.lastMouseX = mouseX;
                 app.lastMouseY = mouseY;
+                if (app.goToDialogVisible) {
+                    handleGoToDialogPointer(app, event.motion.x, event.motion.y, false);
+                    continue;
+                }
                 if (app.topMenuOpen >= 0 && app.topMenuKeyboardFocus && !pointerMoved)
                     continue;
                 if (pointerMoved) app.topMenuKeyboardFocus = false;
                 int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
                 SDL_GetCurrentRenderOutputSize(app.renderer, &physicalWidth, &physicalHeight);
                 SDL_GetWindowSize(app.window, &windowWidth, &windowHeight);
-                if (windowWidth > 0 && windowHeight > 0 && !app.passwordVisible && !app.levelSelect &&
+                if (windowWidth > 0 && windowHeight > 0 && !app.passwordVisible &&
+                    !app.goToDialogVisible && !app.levelSelect &&
                     !app.helpVisible) {
                     const float scale = uiScaleForOutput(physicalWidth, physicalHeight,
                                                          app.profile.uiScalePercent);
@@ -1523,21 +1967,21 @@ void run(App& app) {
                                     static_cast<float>(windowHeight) / scale;
                     const float x = event.motion.x * static_cast<float>(physicalWidth) /
                                     static_cast<float>(windowWidth) / scale;
-                    if (y >= 0.0F && y < 26.0F) {
+                    if (y >= 0.0F && y < kTopMenuBarHeight) {
                         if (app.topMenuOpen >= 0) {
-                            const int hoveredMenu = x < 80.0F ? 0 : x < 170.0F ? 1 :
-                                                    x < 260.0F ? 2 : 3;
+                            const int hoveredMenu = x < 70.0F ? 0 : x < 162.0F ? 1 :
+                                                    x < 246.0F ? 2 : 3;
                             app.topMenuOpen = hoveredMenu;
                             app.topMenuSelection = -1;
                         }
                     } else if (app.topMenuOpen >= 0) {
-                        static constexpr std::array<float, 4> menuLeft{0.0F, 84.0F, 194.0F, 278.0F};
-                        static constexpr std::array<float, 4> menuWidth{188.0F, 196.0F, 190.0F, 212.0F};
+                        static constexpr std::array<float, 4> menuLeft{0.0F, 70.0F, 162.0F, 246.0F};
+                        static constexpr std::array<float, 4> menuWidth{194.0F, 220.0F, 220.0F, 280.0F};
                         const auto menuIndex = static_cast<std::size_t>(app.topMenuOpen);
                         const std::size_t itemCount = static_cast<std::size_t>(topMenuItemCount(app.topMenuOpen));
-                        if (y >= 26.0F && y < 26.0F + static_cast<float>(itemCount) * 24.0F &&
+                        if (y >= kTopMenuDropTop && y < kTopMenuDropTop + static_cast<float>(itemCount) * kTopMenuRowHeight &&
                             x >= menuLeft[menuIndex] && x < menuLeft[menuIndex] + menuWidth[menuIndex])
-                            app.topMenuSelection = static_cast<int>((y - 26.0F) / 24.0F);
+                            app.topMenuSelection = static_cast<int>((y - kTopMenuDropTop) / kTopMenuRowHeight);
                         else
                             app.topMenuSelection = -1;
                     } else if (app.settingsVisible) {
@@ -1563,6 +2007,11 @@ void run(App& app) {
                 app.lastMouseX = static_cast<int>(std::lround(event.button.x));
                 app.lastMouseY = static_cast<int>(std::lround(event.button.y));
                 app.topMenuKeyboardFocus = false;
+                if (handleDialogExitClick(app, event.button.x, event.button.y)) continue;
+                if (app.goToDialogVisible) {
+                    handleGoToDialogPointer(app, event.button.x, event.button.y, true);
+                    continue;
+                }
                 int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
                 SDL_GetCurrentRenderOutputSize(app.renderer, &physicalWidth, &physicalHeight);
                 SDL_GetWindowSize(app.window, &windowWidth, &windowHeight);
@@ -1570,30 +2019,31 @@ void run(App& app) {
                     const float scale = uiScaleForOutput(physicalWidth, physicalHeight, app.profile.uiScalePercent);
                     const float y = event.button.y * static_cast<float>(physicalHeight) / windowHeight / scale;
                     const float x = event.button.x * static_cast<float>(physicalWidth) / windowWidth / scale;
-                    if (y >= 0.0F && y < 26.0F) {
-                        const int selected = x < 80.0F ? 0 : x < 170.0F ? 1 : x < 260.0F ? 2 : 3;
+                    if (y >= 0.0F && y < kTopMenuBarHeight) {
+                        const int selected = x < 70.0F ? 0 : x < 162.0F ? 1 : x < 246.0F ? 2 : 3;
                         app.topMenuOpen = app.topMenuOpen == selected ? -1 : selected;
                         app.topMenuSelection = -1;
                         continue;
                     }
-                    static constexpr std::array<float, 4> menuLeft{0.0F, 84.0F, 194.0F, 278.0F};
-                    static constexpr std::array<float, 4> menuWidth{188.0F, 196.0F, 190.0F, 212.0F};
+                    static constexpr std::array<float, 4> menuLeft{0.0F, 70.0F, 162.0F, 246.0F};
+                    static constexpr std::array<float, 4> menuWidth{194.0F, 220.0F, 220.0F, 280.0F};
                     const float openMenuBottom = app.topMenuOpen >= 0
-                        ? 26.0F + static_cast<float>(topMenuItemCount(app.topMenuOpen)) * 24.0F : 26.0F;
-                    if (app.topMenuOpen >= 0 && y >= 26.0F && y < openMenuBottom &&
+                        ? kTopMenuDropTop + static_cast<float>(topMenuItemCount(app.topMenuOpen)) * kTopMenuRowHeight
+                        : kTopMenuDropTop;
+                    if (app.topMenuOpen >= 0 && y >= kTopMenuDropTop && y < openMenuBottom &&
                         x >= menuLeft[static_cast<std::size_t>(app.topMenuOpen)] &&
                         x < menuLeft[static_cast<std::size_t>(app.topMenuOpen)] + menuWidth[static_cast<std::size_t>(app.topMenuOpen)]) {
-                        const int row = static_cast<int>((y - 26.0F) / 24.0F);
+                        const int row = static_cast<int>((y - kTopMenuDropTop) / kTopMenuRowHeight);
                         activateTopMenuItem(app, app.topMenuOpen, row);
                         continue;
                     }
-                    if (app.topMenuOpen >= 0 && y >= 26.0F) {
+                    if (app.topMenuOpen >= 0 && y >= kTopMenuDropTop) {
                         app.topMenuOpen = -1;
                         app.topMenuSelection = -1;
                         continue;
                     }
                 }
-                if (app.mainMenuVisible && !app.passwordVisible && !app.levelSelect &&
+                if (app.mainMenuVisible && !app.passwordVisible && !app.goToDialogVisible && !app.levelSelect &&
                     !app.helpVisible && !app.settingsVisible)
                     handleMainMenuPointer(app, event.button.x, event.button.y, true);
                 else if (app.levelSelect)
@@ -1602,7 +2052,7 @@ void run(App& app) {
                     handleSettingsPointer(app, event.button.x, event.button.y);
                 else if (app.bestTimesVisible)
                     handleBestTimesPointer(app, event.button.x, event.button.y);
-                else if (!app.paused && !app.helpVisible && !app.passwordVisible &&
+                else if (!app.paused && !app.helpVisible && !app.passwordVisible && !app.goToDialogVisible &&
                          !app.mainMenuVisible && app.topMenuOpen < 0 &&
                          app.game.outcome == chips::Outcome::playing) {
                     int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
@@ -1659,6 +2109,7 @@ void run(App& app) {
             app.levelPackDialogPending = false;
             app.profileMessage = "Could not finish the file dialog. Please try again.";
             app.lastTick = SDL_GetTicks();
+            app.lastPlayerTick = app.lastTick;
             if (app.exitAfterFileDialog) app.running = false;
         }
         const Uint64 now = SDL_GetTicks();
@@ -1668,7 +2119,7 @@ void run(App& app) {
         }
         if (app.gamepad && app.gamepadStickDirection >= 0 && now >= app.gamepadStickNextRepeat) {
             handleGamepadDirection(app, static_cast<chips::Direction>(app.gamepadStickDirection));
-            app.gamepadStickNextRepeat = now + 180;
+            app.gamepadStickNextRepeat = now + kGamepadRepeatMs;
         }
         const int heldDpadDirection = heldGamepadDpadDirection(app.gamepad);
         if (app.paused && !pauseActionsVisible(app)) {
@@ -1683,22 +2134,31 @@ void run(App& app) {
             app.gamepadDpadDirection = heldDpadDirection;
             if (heldDpadDirection >= 0) {
                 handleGamepadDirection(app, static_cast<chips::Direction>(heldDpadDirection));
-                app.gamepadDpadNextRepeat = now + 300;
+                app.gamepadDpadNextRepeat = now + kGamepadInitialRepeatMs;
             } else {
                 app.gamepadDpadNextRepeat = 0;
             }
         } else if (heldDpadDirection >= 0 && now >= app.gamepadDpadNextRepeat) {
             handleGamepadDirection(app, static_cast<chips::Direction>(heldDpadDirection));
-            app.gamepadDpadNextRepeat = now + 180;
+            app.gamepadDpadNextRepeat = now + kGamepadRepeatMs;
         }
-        if (app.paused || app.helpVisible || app.debugVisible || app.settingsVisible || app.levelSelect ||
-            app.levelPlacardVisible || app.passwordVisible || app.mainMenuVisible || app.levelPackDialogPending)
+        const bool gameplayActive = !app.paused && !app.helpVisible && !app.debugVisible &&
+            !app.settingsVisible && !app.levelSelect && !app.levelPlacardVisible &&
+            !app.passwordVisible && !app.goToDialogVisible && !app.mainMenuVisible && !app.levelPackDialogPending &&
+            app.game.outcome == chips::Outcome::playing;
+        if (!gameplayActive) {
             app.lastTick = now;
+            app.lastPlayerTick = now;
+            app.keyboardDirection = -1;
+            app.keyboardScancode = -1;
+            app.keyboardRepeatAt = 0;
+        }
         app.audio.update();
-        // Keep gameplay on the selected fixed 95 ms cadence.
+        // Keep gameplay on the original fixed 110 ms cadence.
         while (now - app.lastTick >= kSimulationTickMs) {
+            advancePlayerClockUntil(app, std::min(now, app.lastTick + kSimulationTickMs));
             if (!app.paused && !app.helpVisible && !app.debugVisible && !app.settingsVisible && !app.levelSelect &&
-                !app.levelPlacardVisible && !app.passwordVisible && !app.mainMenuVisible &&
+                !app.levelPlacardVisible && !app.passwordVisible && !app.goToDialogVisible && !app.mainMenuVisible &&
                 !app.levelPackDialogPending) {
                 const int oldPosition = app.game.playerPosition;
                 std::vector<int> oldCreaturePositions;
@@ -1709,7 +2169,7 @@ void run(App& app) {
                 const auto queuedDirectionBeforeTick = app.game.pendingDirection;
                 const bool slidingBeforeTick = app.game.sliding;
                 const auto slideDirectionBeforeTick = app.game.slideDirection;
-                app.game.advanceTicks();
+                app.game.advanceTicks(1, false);
                 const bool playerAttempt = app.game.playerAttemptedThisTick;
                 const bool playerMoved = app.game.playerMovedThisTick;
                 if (playerAttempt) {
@@ -1759,6 +2219,8 @@ void run(App& app) {
                                                      creature.teleportedThisTick};
                     }
                 }
+                if (thiefActivated) app.audio.play(chips::AudioCue::thief);
+
                 if (oldOutcome == chips::Outcome::playing && app.game.outcome != oldOutcome) {
                     if (splash) app.audio.play(chips::AudioCue::splash);
                     app.audio.play(app.game.outcome == chips::Outcome::won
@@ -1771,11 +2233,10 @@ void run(App& app) {
                             : chips::AudioCue::pickup;
                         const auto cue = playerTeleported ? chips::AudioCue::teleport
                             : doorOpened ? chips::AudioCue::door
-                            : thiefActivated ? chips::AudioCue::thief
                             : splash ? chips::AudioCue::splash
                             : switchActivated ? chips::AudioCue::switchTile
                             : pickup != chips::PickupKind::none ? pickupCue : chips::AudioCue::move;
-                        app.audio.play(cue);
+                        if (!thiefActivated) app.audio.play(cue);
                     } else {
                         app.audio.play(chips::AudioCue::blocked);
                     }
@@ -1787,6 +2248,7 @@ void run(App& app) {
             }
             app.lastTick += kSimulationTickMs;
         }
+        if (gameplayActive) advancePlayerClockUntil(app, now);
         recordLevelWin(app);
         draw(app);
     }
@@ -2075,15 +2537,18 @@ int main(int argc, char** argv) {
             app.mainMenuVisible = false;
             app.debugAllowKeypadMovement = true;
             app.lastTick = SDL_GetTicks();
+            app.lastPlayerTick = app.lastTick;
         }
         run(app);
         if (app.gamepad) SDL_CloseGamepad(app.gamepad);
         app.audio.shutdown();
+        chips_native::shutdownTextRendering();
         SDL_DestroyTexture(app.originalTransparentSprites);
         SDL_DestroyTexture(app.polishedPlayerLandPoses);
         SDL_DestroyTexture(app.polishedPlayerSwimPoses);
         SDL_DestroyTexture(app.cleanedCreatureSprites);
         SDL_DestroyTexture(app.cleanedKeyBootIcons);
+        SDL_DestroyTexture(app.gameBackground);
         SDL_DestroyTexture(app.menuBackground);
         SDL_DestroyTexture(app.victoryIllustration);
         SDL_DestroyTexture(app.appIcon);

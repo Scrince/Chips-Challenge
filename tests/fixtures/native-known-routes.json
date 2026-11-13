@@ -29,6 +29,13 @@
     "route": "WWWNNNNWWWSSSSSWNNNENNEEESSSSEEESSS"
   },
   {
+    "level": 7,
+    "status": "solved",
+    "input_mode": "press",
+    "moves": 67,
+    "route": "EESSNNSSENWSSSWWNWWNNNNESESSSEWSESNNNNEEEEENNNNWSEESSSSSEEEWWWNNEEE"
+  },
+  {
     "level": 8,
     "status": "solved",
     "completed_by_player": false,

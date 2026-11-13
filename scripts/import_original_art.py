@@ -144,6 +144,20 @@ def main() -> None:
             "source_sha256": sha256(source_path),
             "sha256": sha256(asset_path),
         })
+    game_background_path = OUT / "menu-background-hd.png"
+    if game_background_path.is_file():
+        with Image.open(game_background_path) as image:
+            dimensions = f"{image.width}x{image.height}"
+            background_mode = image.mode
+        original_background = OUT / "menu-background.png"
+        records.append({
+            "path": game_background_path.relative_to(ROOT / "assets").as_posix(),
+            "format": f"PNG, {background_mode}, {dimensions}",
+            "provenance": "High-resolution generated recreation of the original green circuit-board title background, with smooth antialiased traces for full-window scaling behind gameplay.",
+            "source": "assets/art/menu-background.png",
+            "source_sha256": sha256(original_background),
+            "sha256": sha256(game_background_path),
+        })
     original_icon = OUT / "app-icon.png"
     with Image.open(original_icon) as image:
         image.save(OUT / "app-icon.ico", format="ICO",
@@ -209,9 +223,29 @@ def main() -> None:
             "sha256": sha256(asset_path),
         })
 
+    font_records = (
+        (ROOT / "assets/fonts/NotoSans.ttf", "TrueType variable font",
+         "Noto Sans bundled as the runtime interface font under the SIL Open Font License.",
+         "https://github.com/google/fonts/blob/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf"),
+        (ROOT / "assets/fonts/OFL.txt", "Text license",
+         "SIL Open Font License for the bundled Noto Sans font.",
+         "https://github.com/google/fonts/blob/main/ofl/notosans/OFL.txt"),
+    )
+    for asset_path, asset_format, description, source in font_records:
+        if not asset_path.is_file():
+            continue
+        records.append({
+            "path": asset_path.relative_to(ROOT / "assets").as_posix(),
+            "format": asset_format,
+            "provenance": description,
+            "source": source,
+            "source_sha256": sha256(asset_path),
+            "sha256": sha256(asset_path),
+        })
+
     manifest = {
-        "schema_version": 4,
-        "asset_scope": "runtime-ready conversions of user-supplied original Windows game artwork",
+        "schema_version": 5,
+        "asset_scope": "runtime artwork, bundled UI font, and original user-supplied Windows game audio",
         "conversion": "python scripts/import_original_art.py (Pillow); original artwork is converted to RGBA and enlarged with nearest-neighbor sampling; every transparent sprite frame reproduces the source DrawTile image/mask pair with image tile+0x30 and mask tile+0x60.",
         "legacy_media_policy": "The supplied original artwork is intentionally used at runtime. The legacy executable, assembly, and original audio files remain outside runtime dependencies.",
         "assets": records,

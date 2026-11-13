@@ -1,9 +1,25 @@
 {
   "schema_version": 5,
-  "asset_scope": "runtime artwork and original user-supplied Windows game audio",
+  "asset_scope": "runtime artwork, bundled UI font, and original user-supplied Windows game audio",
   "conversion": "python scripts/import_original_art.py (Pillow); original artwork is converted to RGBA and enlarged with nearest-neighbor sampling; every transparent sprite frame reproduces the source DrawTile image/mask pair with image tile+0x30 and mask tile+0x60.",
   "legacy_media_policy": "The supplied original artwork and WAV/MIDI audio are used at runtime. The legacy executable and assembly remain outside runtime dependencies.",
   "assets": [
+    {
+      "path": "fonts/NotoSans.ttf",
+      "format": "TrueType font",
+      "provenance": "Noto Sans Regular bundled as the runtime interface font; licensed under the SIL Open Font License included with this asset.",
+      "source": "https://github.com/google/fonts/blob/main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf",
+      "source_sha256": "BFB7BB691513F12E734DC346C03A03F784912432D7E3FA8E56EFCF906FE86B3D",
+      "sha256": "BFB7BB691513F12E734DC346C03A03F784912432D7E3FA8E56EFCF906FE86B3D"
+    },
+    {
+      "path": "fonts/OFL.txt",
+      "format": "Text license",
+      "provenance": "SIL Open Font License for the bundled Noto Sans font.",
+      "source": "https://github.com/google/fonts/blob/main/ofl/notosans/OFL.txt",
+      "source_sha256": "CEE9892F9F0CC8FE882C9E9537EE6A89621D86EE7CEAF70B02E2B2B1C25C061A",
+      "sha256": "CEE9892F9F0CC8FE882C9E9537EE6A89621D86EE7CEAF70B02E2B2B1C25C061A"
+    },
     {
       "path": "art/tile-atlas.png",
       "format": "PNG, RGBA, 832x1024",
@@ -19,6 +35,14 @@
       "source": "CHIPS.EXE-master/CHIPS.EXE-master/res/BACKGROUND.bmp",
       "source_sha256": "F1592FA0AC01B30B339FC0122D16D80CB710C4BDC05AB2C441D745BCB0D3E623",
       "sha256": "48FC664DEBF0868F046671D21DE2E27FA131994E4A702BACF576B158A9030B43"
+    },
+    {
+      "path": "art/menu-background-hd.png",
+      "format": "PNG, RGB, 1536x1024",
+      "provenance": "High-resolution generated recreation of the original green circuit-board title background, with smooth antialiased traces for full-window scaling behind gameplay.",
+      "source": "assets/art/menu-background.png",
+      "source_sha256": "48FC664DEBF0868F046671D21DE2E27FA131994E4A702BACF576B158A9030B43",
+      "sha256": "7F8AE93E7320C62E10EBE60BE4E4A351D504FA6D1A558C90FB12497F8EB9F45C"
     },
     {
       "path": "art/victory-illustration.png",

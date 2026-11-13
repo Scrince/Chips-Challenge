@@ -23,8 +23,19 @@ struct MotionAnimation {
 inline constexpr std::size_t kBestTimesPerPage = 9;
 inline constexpr std::size_t kNoPasswordTarget = static_cast<std::size_t>(-1);
 inline constexpr int topMenuItemCount(int menu) {
-    return menu == 0 ? 4 : menu == 2 ? 3 : 2;
+    return menu == 0 ? 4 : menu == 1 ? 4 : menu == 2 ? 6 : menu == 3 ? 5 : 0;
 }
+inline constexpr float kTopMenuBarHeight = 28.0F;
+inline constexpr float kTopMenuRowHeight = 23.0F;
+inline constexpr float kTopMenuDropTop = kTopMenuBarHeight;
+inline constexpr float kMainMenuPanelHeight = 356.0F;
+inline constexpr float kMainMenuFirstItemY = 52.0F;
+inline constexpr float kMainMenuItemRowStep = 32.0F;
+inline constexpr float kMainMenuSelectionOffsetY = -5.0F;
+inline constexpr float kMainMenuSelectionHeight = 28.0F;
+inline constexpr float kGoToFieldWidth = 200.0F;
+inline constexpr float kGoToFieldHeight = 36.0F;
+inline constexpr std::size_t kGoToInputMaxLength = 10;
 
 // Shared application state passed to platform, input, rendering, audio, and
 // persistence code. Game rules remain in the SDL-independent engine module.
@@ -36,6 +47,7 @@ struct App {
     SDL_Texture* scoreboardPanel{};
     SDL_Texture* appIcon{};
     SDL_Texture* menuBackground{};
+    SDL_Texture* gameBackground{};
     SDL_Texture* victoryIllustration{};
     SDL_Texture* originalTransparentSprites{};
     SDL_Texture* polishedPlayerLandPoses{};
@@ -53,6 +65,9 @@ struct App {
     int gamepadDpadDirection{-1};
     Uint64 gamepadDpadNextRepeat{};
     bool gamepadDpadIgnoreHeld{};
+    int keyboardDirection{-1};
+    int keyboardScancode{-1};
+    Uint64 keyboardRepeatAt{};
     chips::AudioSystem audio;
     std::vector<chips::Level> levels;
     std::size_t levelIndex{};
@@ -62,6 +77,7 @@ struct App {
     std::string profileFileName{"campaign.ccprofile"};
     std::string profileMessage;
     Uint64 lastTick{};
+    Uint64 lastPlayerTick{};
     bool running{true};
     bool paused{};
     bool helpVisible{};
@@ -75,6 +91,13 @@ struct App {
     bool settingsVisible{};
     bool mainMenuVisible{true};
     bool passwordVisible{};
+    bool goToDialogVisible{};
+    bool goToReturnToLevelSelect{};
+    bool goToPasswordFocus{};
+    int goToButtonSelection{};
+    std::string goToLevelInput;
+    std::string goToPasswordInput;
+    std::string goToDialogMessage;
     std::size_t passwordTargetLevel{kNoPasswordTarget};
     bool passwordReturnToLevelSelect{};
     std::string passwordInput;

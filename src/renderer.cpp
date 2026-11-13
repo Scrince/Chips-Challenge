@@ -2,6 +2,8 @@
 #include "render_assets.hpp"
 #include "viewport.hpp"
 
+#include <SDL3_ttf/SDL_ttf.h>
+
 #include <algorithm>
 #include <array>
 #include <cstdarg>
@@ -10,6 +12,7 @@
 #include <cstdio>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 namespace chips_native {
 namespace {
@@ -31,6 +34,54 @@ constexpr SDL_Color kCardCaption{20, 77, 88, 255};
 constexpr SDL_Color kCardText{232, 240, 242, 255};
 constexpr SDL_Color kCardMuted{164, 184, 190, 255};
 constexpr SDL_Color kCardSelection{18, 105, 126, 255};
+
+struct CachedText {
+    SDL_Texture* texture{};
+    float width{};
+    float height{};
+};
+
+std::string gFontPath;
+std::unordered_map<int, TTF_Font*> gFonts;
+std::unordered_map<std::string, CachedText> gTextCache;
+bool gTtfInitialized{};
+
+int fontSizeFor(float pixelSize) {
+    return std::clamp(static_cast<int>(std::lround(pixelSize * 9.0F)), 8, 28);
+}
+
+TTF_Font* fontFor(float pixelSize) {
+    const int size = fontSizeFor(pixelSize);
+    if (const auto found = gFonts.find(size); found != gFonts.end()) return found->second;
+    if (gFontPath.empty()) return nullptr;
+    TTF_Font* font = TTF_OpenFont(gFontPath.c_str(), static_cast<float>(size));
+    if (!font) return nullptr;
+    TTF_SetFontHinting(font, TTF_HINTING_LIGHT);
+    gFonts.emplace(size, font);
+    return font;
+}
+
+float measureBitmapText(const char* text, float pixelSize) {
+    if (!text) return 0.0F;
+    if (auto* font = fontFor(pixelSize)) {
+        int width = 0;
+        int height = 0;
+        if (TTF_GetStringSize(font, text, 0, &width, &height))
+            return static_cast<float>(width);
+    }
+    return static_cast<float>(std::char_traits<char>::length(text)) * 6.0F * pixelSize;
+}
+
+float measureBitmapTextHeight(const char* text, float pixelSize) {
+    if (!text) return 0.0F;
+    if (auto* font = fontFor(pixelSize)) {
+        int width = 0;
+        int height = 0;
+        if (TTF_GetStringSize(font, text, 0, &width, &height))
+            return static_cast<float>(height);
+    }
+    return 7.0F * pixelSize;
+}
 
 struct BoardLayout {
     int cell{};
@@ -162,6 +213,47 @@ std::array<std::uint8_t, 7> bitmapGlyph(unsigned char character) {
 
 void drawBitmapText(SDL_Renderer* renderer, float x, float y, const char* text, float pixelSize) {
     if (!text || pixelSize <= 0.0F) return;
+    if (auto* font = fontFor(pixelSize)) {
+        SDL_Color color{};
+        (void)SDL_GetRenderDrawColor(renderer, &color.r, &color.g, &color.b, &color.a);
+        std::string key;
+        key.reserve(std::char_traits<char>::length(text) + 5);
+        key.push_back(static_cast<char>(fontSizeFor(pixelSize)));
+        key.push_back(static_cast<char>(color.r));
+        key.push_back(static_cast<char>(color.g));
+        key.push_back(static_cast<char>(color.b));
+        key.push_back(static_cast<char>(color.a));
+        key += text;
+        auto found = gTextCache.find(key);
+        if (found == gTextCache.end()) {
+            if (gTextCache.size() >= 2048) {
+                for (const auto& [unused, cached] : gTextCache) {
+                    (void)unused;
+                    SDL_DestroyTexture(cached.texture);
+                }
+                gTextCache.clear();
+            }
+            SDL_Surface* surface = TTF_RenderText_Blended(font, text, 0, color);
+            if (surface) {
+                SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+                if (texture) {
+                    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+                    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+                    const CachedText cached{texture, static_cast<float>(surface->w),
+                                            static_cast<float>(surface->h)};
+                    found = gTextCache.emplace(std::move(key), cached).first;
+                }
+                SDL_DestroySurface(surface);
+            }
+        }
+        if (found != gTextCache.end()) {
+            const SDL_FRect destination{x, y, found->second.width, found->second.height};
+            (void)SDL_RenderTexture(renderer, found->second.texture, nullptr, &destination);
+            return;
+        }
+    }
+
+    // Keep the compact built-in face as a fallback if the bundled font cannot load.
     float cursor = x;
     std::vector<SDL_FRect> runs;
     for (const auto* character = reinterpret_cast<const unsigned char*>(text); *character; ++character) {
@@ -238,7 +330,7 @@ void drawTerrainAccent(SDL_Renderer* renderer, std::uint8_t tile,
 }
 
 void drawUiText(SDL_Renderer* renderer, float x, float y, const char* text) {
-    drawBitmapText(renderer, x, y, text, 2.0F);
+    drawBitmapText(renderer, x, y, text, 1.75F);
 }
 
 void drawUiTextFormat(SDL_Renderer* renderer, float x, float y, const char* format, ...) {
@@ -251,11 +343,11 @@ void drawUiTextFormat(SDL_Renderer* renderer, float x, float y, const char* form
 }
 
 void drawSmallUiText(SDL_Renderer* renderer, float x, float y, const char* text) {
-    drawBitmapText(renderer, x, y, text, 1.0F);
+    drawBitmapText(renderer, x, y, text, 0.95F);
 }
 
 void drawMediumUiText(SDL_Renderer* renderer, float x, float y, const char* text) {
-    drawBitmapText(renderer, x, y, text, 1.5F);
+    drawBitmapText(renderer, x, y, text, 1.35F);
 }
 
 void drawMediumUiTextFormat(SDL_Renderer* renderer, float x, float y, const char* format, ...) {
@@ -303,9 +395,12 @@ void drawActionButton(SDL_Renderer* renderer, const SDL_FRect& bounds, const cha
     SDL_RenderFillRect(renderer, &left);
     SDL_RenderFillRect(renderer, &bottom);
     SDL_RenderFillRect(renderer, &right);
-    const float textWidth = static_cast<float>(std::char_traits<char>::length(label)) * 12.0F;
+    constexpr float textSize = 1.8F;
+    const float textWidth = measureBitmapText(label, textSize);
+    const float textHeight = measureBitmapTextHeight(label, textSize);
     setColor(renderer, kCardText);
-    drawUiText(renderer, bounds.x + (bounds.w - textWidth) * 0.5F, bounds.y + 5.0F, label);
+    drawBitmapText(renderer, bounds.x + (bounds.w - textWidth) * 0.5F,
+                   bounds.y + (bounds.h - textHeight) * 0.5F, label, textSize);
 }
 
 void drawDigitalSegments(SDL_Renderer* renderer, float x, float y, float width, float height,
@@ -369,10 +464,10 @@ void drawWrappedUiText(SDL_Renderer* renderer, float x, float y,
     std::size_t lineCount = 0;
     while (words >> word) {
         if (!line.empty() && line.size() + word.size() + 1 > maxChars) {
-            drawUiText(renderer, x, y + static_cast<float>(lineCount * 16), line.c_str());
+            drawUiText(renderer, x, y + static_cast<float>(lineCount * 20), line.c_str());
             if (++lineCount >= maxLines) {
                 drawUiText(renderer, x + static_cast<float>(maxChars * 9 - 18),
-                                    y + static_cast<float>((maxLines - 1) * 16), "...");
+                                    y + static_cast<float>((maxLines - 1) * 20), "...");
                 return;
             }
             line.clear();
@@ -381,7 +476,7 @@ void drawWrappedUiText(SDL_Renderer* renderer, float x, float y,
         line += word;
     }
     if (!line.empty() && lineCount < maxLines)
-        drawUiText(renderer, x, y + static_cast<float>(lineCount * 16), line.c_str());
+        drawUiText(renderer, x, y + static_cast<float>(lineCount * 20), line.c_str());
 }
 
 void drawWrappedMediumText(SDL_Renderer* renderer, float x, float y,
@@ -435,32 +530,7 @@ std::vector<std::string> wrapHintText(const std::string& text, std::size_t maxCh
 
 void drawItalicBitmapText(SDL_Renderer* renderer, float x, float y,
                           const std::string& text, float pixelSize) {
-    std::vector<SDL_FRect> runs;
-    float cursor = x;
-    for (const auto character : text) {
-        const auto rows = bitmapGlyph(static_cast<unsigned char>(character));
-        for (std::size_t row = 0; row < rows.size(); ++row) {
-            const float shear = static_cast<float>(rows.size() - 1 - row) * pixelSize * 0.16F;
-            std::size_t column = 0;
-            while (column < 5) {
-                if ((rows[row] & (1U << (4U - static_cast<unsigned>(column)))) == 0) {
-                    ++column;
-                    continue;
-                }
-                const auto start = column;
-                do {
-                    ++column;
-                } while (column < 5 &&
-                         (rows[row] & (1U << (4U - static_cast<unsigned>(column)))) != 0);
-                runs.push_back({cursor + shear + static_cast<float>(start) * pixelSize,
-                                y + static_cast<float>(row) * pixelSize,
-                                static_cast<float>(column - start) * pixelSize, pixelSize});
-            }
-        }
-        cursor += 6.0F * pixelSize;
-    }
-    if (!runs.empty())
-        SDL_RenderFillRects(renderer, runs.data(), static_cast<int>(runs.size()));
+    drawBitmapText(renderer, x, y, text.c_str(), pixelSize);
 }
 
 SDL_Color tileColor(std::uint8_t tile) {
@@ -592,6 +662,38 @@ void drawInventorySlot(SDL_Renderer* renderer, SDL_Texture* atlas, SDL_Texture* 
 
 } // namespace
 
+bool initializeTextRendering(SDL_Renderer* renderer, const char* fontPath) {
+    if (!renderer || !fontPath || !*fontPath || !TTF_Init()) return false;
+    gTtfInitialized = true;
+    gFontPath = fontPath;
+    for (const int size : {9, 12, 14, 16, 18}) {
+        TTF_Font* font = TTF_OpenFont(gFontPath.c_str(), static_cast<float>(size));
+        if (!font) {
+            shutdownTextRendering();
+            return false;
+        }
+        TTF_SetFontHinting(font, TTF_HINTING_LIGHT);
+        gFonts.emplace(size, font);
+    }
+    return true;
+}
+
+void shutdownTextRendering() {
+    for (const auto& [unused, cached] : gTextCache) {
+        (void)unused;
+        SDL_DestroyTexture(cached.texture);
+    }
+    gTextCache.clear();
+    for (const auto& [unused, font] : gFonts) {
+        (void)unused;
+        TTF_CloseFont(font);
+    }
+    gFonts.clear();
+    gFontPath.clear();
+    if (gTtfInitialized) TTF_Quit();
+    gTtfInitialized = false;
+}
+
 LevelGridLayout levelGridLayout(int outputWidth, int outputHeight) {
     LevelGridLayout layout;
     layout.width = std::max(320.0F, std::min(680.0F, static_cast<float>(outputWidth) - 32.0F));
@@ -599,16 +701,18 @@ LevelGridLayout levelGridLayout(int outputWidth, int outputHeight) {
     layout.left = (static_cast<float>(outputWidth) - layout.width) * 0.5F;
     layout.top = (static_cast<float>(outputHeight) - layout.height) * 0.5F;
     layout.cell = std::min(48.0F, std::min((layout.width - 48.0F) / 13.0F,
-                                           (layout.height - 124.0F) / 12.0F));
+                                           (layout.height - 148.0F) / 12.0F));
     layout.gridLeft = layout.left + 24.0F;
-    layout.gridTop = layout.top + 84.0F;
+    layout.gridTop = layout.top + 108.0F;
     layout.previewBounds = {layout.left + layout.width - 152.0F,
-                            layout.top + (layout.height - 128.0F) * 0.5F + 4.0F,
-                            128.0F, 128.0F};
-    layout.previousPageButton = {layout.left + layout.width - 84.0F, layout.top + 16.0F,
-                                 28.0F, 24.0F};
-    layout.nextPageButton = {layout.left + layout.width - 48.0F, layout.top + 16.0F,
-                             28.0F, 24.0F};
+                            layout.top + (layout.height - 128.0F) * 0.5F - 22.0F,
+                            120.0F, 120.0F};
+    layout.exitButton = {layout.left + layout.width - 40.0F, layout.top + 8.0F,
+                         28.0F, 28.0F};
+    layout.previousPageButton = {layout.left + layout.width - 112.0F, layout.top + 48.0F,
+                                 28.0F, 26.0F};
+    layout.nextPageButton = {layout.left + layout.width - 76.0F, layout.top + 48.0F,
+                             28.0F, 26.0F};
     return layout;
 }
 
@@ -645,8 +749,9 @@ BestTimesOverlayLayout bestTimesOverlayLayout(int outputWidth, int outputHeight)
     layout.height = 360.0F;
     layout.left = (static_cast<float>(outputWidth) - layout.width) * 0.5F;
     layout.top = (static_cast<float>(outputHeight) - layout.height) * 0.5F;
-    layout.previousPageButton = {layout.left + layout.width - 84.0F, layout.top + 16.0F, 28.0F, 24.0F};
-    layout.nextPageButton = {layout.left + layout.width - 48.0F, layout.top + 16.0F, 28.0F, 24.0F};
+    layout.exitButton = dialogExitButton(layout.left, layout.top, layout.width);
+    layout.previousPageButton = {layout.left + layout.width - 84.0F, layout.top + 48.0F, 28.0F, 24.0F};
+    layout.nextPageButton = {layout.left + layout.width - 48.0F, layout.top + 48.0F, 28.0F, 24.0F};
     return layout;
 }
 
@@ -657,6 +762,7 @@ ActionOverlayLayout pauseOverlayLayout(int outputWidth, int outputHeight) {
     const float left = (static_cast<float>(outputWidth) - width) * 0.5F;
     const float top = (static_cast<float>(outputHeight) - height) * 0.5F;
     layout.card = {left, top, width, height};
+    layout.exitButton = dialogExitButton(left, top, width);
     layout.buttonCount = 3;
     for (std::size_t i = 0; i < layout.buttonCount; ++i)
         layout.buttons[i] = {left + 28.0F, top + 68.0F + static_cast<float>(i) * 30.0F,
@@ -673,6 +779,7 @@ ActionOverlayLayout resultOverlayLayout(int outputWidth, int outputHeight, bool 
     const float left = (static_cast<float>(outputWidth) - width) * 0.5F;
     const float top = (static_cast<float>(outputHeight) - height) * 0.5F;
     layout.card = {left, top, width, height};
+    layout.exitButton = {left + width - 25.0F, top + 5.0F, 18.0F, 18.0F};
     layout.buttonCount = won ? 1 : 2;
     constexpr float margin = 28.0F;
     constexpr float gap = 10.0F;
@@ -715,6 +822,27 @@ void draw(App& app) {
     setColor(app.renderer, kBackground);
     SDL_RenderClear(app.renderer);
     SDL_SetRenderScale(app.renderer, uiScale, uiScale);
+
+    if (app.gameBackground) {
+        float backgroundWidth = 0.0F;
+        float backgroundHeight = 0.0F;
+        if (SDL_GetTextureSize(app.gameBackground, &backgroundWidth, &backgroundHeight) &&
+            backgroundWidth > 0.0F && backgroundHeight > 0.0F) {
+            SDL_FRect destination{0.0F, 0.0F, static_cast<float>(outputWidth),
+                                  static_cast<float>(outputHeight)};
+            SDL_FRect source{0.0F, 0.0F, backgroundWidth, backgroundHeight};
+            const float destinationAspect = destination.w / destination.h;
+            const float sourceAspect = backgroundWidth / backgroundHeight;
+            if (destinationAspect > sourceAspect) {
+                source.h = backgroundWidth / destinationAspect;
+                source.y = (backgroundHeight - source.h) * 0.5F;
+            } else {
+                source.w = backgroundHeight * destinationAspect;
+                source.x = (backgroundWidth - source.w) * 0.5F;
+            }
+            SDL_RenderTexture(app.renderer, app.gameBackground, &source, &destination);
+        }
+    }
 
     const auto board = boardLayout(app, outputWidth, outputHeight);
     const int cell = board.cell;
@@ -849,25 +977,32 @@ void draw(App& app) {
     }
     SDL_SetRenderClipRect(app.renderer, nullptr);
 
-    // Compact desktop menu row styled to match the modern slate overlays.
-    setColor(app.renderer, kCard);
-    SDL_FRect menuStrip{0.0F, 0.0F, static_cast<float>(outputWidth), 26.0F};
+    // Match the original Windows application's compact, light menu bar.
+    constexpr SDL_Color kClassicMenu{240, 240, 240, 255};
+    constexpr SDL_Color kClassicMenuText{24, 24, 24, 255};
+    constexpr SDL_Color kClassicMenuHighlight{10, 105, 190, 255};
+    constexpr SDL_Color kClassicMenuBorder{128, 128, 128, 255};
+    setColor(app.renderer, kClassicMenu);
+    SDL_FRect menuStrip{0.0F, 0.0F, static_cast<float>(outputWidth), kTopMenuBarHeight};
     SDL_RenderFillRect(app.renderer, &menuStrip);
-    setColor(app.renderer, kCardEdge);
-    SDL_FRect menuRule{0.0F, 24.0F, static_cast<float>(outputWidth), 2.0F};
+    setColor(app.renderer, SDL_Color{196, 196, 196, 255});
+    SDL_FRect menuRule{0.0F, kTopMenuBarHeight - 1.0F, static_cast<float>(outputWidth), 1.0F};
     SDL_RenderFillRect(app.renderer, &menuRule);
-    constexpr std::array<float, 4> menuLeft{0.0F, 80.0F, 170.0F, 260.0F};
-    constexpr std::array<float, 4> menuWidth{80.0F, 90.0F, 90.0F, 72.0F};
-    constexpr std::array<float, 4> menuTextInset{12.0F, 12.0F, 20.0F, 20.0F};
-    constexpr std::array<const char*, 4> menuLabels{"GAME", "OPTIONS", "LEVEL", "HELP"};
+    constexpr std::array<float, 4> menuLeft{0.0F, 70.0F, 162.0F, 246.0F};
+    constexpr std::array<float, 4> menuWidth{70.0F, 92.0F, 84.0F, 72.0F};
+    constexpr std::array<const char*, 4> menuLabels{"Game", "Options", "Level", "Help"};
     for (std::size_t i = 0; i < menuLabels.size(); ++i) {
         if (app.topMenuOpen == static_cast<int>(i)) {
-            SDL_FRect activeMenu{menuLeft[i], 0.0F, menuWidth[i], 24.0F};
-            setColor(app.renderer, kCardSelection);
+            SDL_FRect activeMenu{menuLeft[i], 0.0F, menuWidth[i], kTopMenuBarHeight - 1.0F};
+            setColor(app.renderer, kClassicMenuHighlight);
             SDL_RenderFillRect(app.renderer, &activeMenu);
         }
-        setColor(app.renderer, app.topMenuOpen == static_cast<int>(i) ? kCardText : kCardMuted);
-        drawUiText(app.renderer, menuLeft[i] + menuTextInset[i], 7.0F, menuLabels[i]);
+        setColor(app.renderer, app.topMenuOpen == static_cast<int>(i)
+            ? SDL_Color{255, 255, 255, 255} : kClassicMenuText);
+        constexpr float menuTextSize = 1.7F;
+        const float menuTextY = (kTopMenuBarHeight -
+            measureBitmapTextHeight(menuLabels[i], menuTextSize)) * 0.5F;
+        drawBitmapText(app.renderer, menuLeft[i] + 9.0F, menuTextY, menuLabels[i], menuTextSize);
     }
 
     const float panelScale = static_cast<float>(board.height) / 300.0F;
@@ -950,11 +1085,11 @@ void draw(App& app) {
         float hintTextHeight = 0.0F;
         while (hintPixelSize >= 0.7F * panelScale) {
             const auto maxChars = static_cast<std::size_t>(std::max(
-                1.0F, std::floor(maxTextWidth / (6.0F * hintPixelSize))));
+                1.0F, std::floor(maxTextWidth / (5.5F * hintPixelSize))));
             hintLines = wrapHintText(hintText, maxChars);
             hintLineStep = 19.0F * hintPixelSize / 1.4F;
             hintTextHeight = hintLines.empty() ? 0.0F
-                : static_cast<float>(hintLines.size() - 1) * hintLineStep + 7.0F * hintPixelSize;
+                : static_cast<float>(hintLines.size() - 1) * hintLineStep + 9.0F * hintPixelSize;
             if (hintTextHeight <= maxTextHeight) break;
             hintPixelSize -= 0.05F * panelScale;
         }
@@ -962,7 +1097,7 @@ void draw(App& app) {
         setColor(app.renderer, SDL_Color{0, 242, 255, 255});
         for (std::size_t line = 0; line < hintLines.size(); ++line) {
             const auto& text = hintLines[line];
-            const float lineWidth = static_cast<float>(text.size()) * 6.0F * hintPixelSize;
+            const float lineWidth = measureBitmapText(text.c_str(), hintPixelSize);
             drawItalicBitmapText(app.renderer,
                 hintPanel.x + (hintPanel.w - lineWidth) * 0.5F,
                 hintPanel.y + verticalInset + static_cast<float>(line) * hintLineStep,
@@ -971,31 +1106,34 @@ void draw(App& app) {
     }
 
     if (app.paused || app.helpVisible || app.debugVisible || app.bestTimesVisible || app.settingsVisible || app.levelSelect ||
-        app.passwordVisible || app.mainMenuVisible) {
+        app.passwordVisible || app.goToDialogVisible || app.mainMenuVisible) {
         SDL_SetRenderDrawBlendMode(app.renderer, SDL_BLENDMODE_BLEND);
         setColor(app.renderer, SDL_Color{0, 0, 0, 48});
         SDL_FRect shade{0.0F, 0.0F, static_cast<float>(outputWidth), static_cast<float>(outputHeight)};
         SDL_RenderFillRect(app.renderer, &shade);
-        if (app.mainMenuVisible && !app.levelSelect && !app.passwordVisible &&
-            !app.settingsVisible && !app.helpVisible && !app.bestTimesVisible && app.menuBackground) {
-            SDL_SetTextureColorMod(app.menuBackground, 64, 84, 64);
-            SDL_SetTextureAlphaMod(app.menuBackground, 255);
+        if (app.mainMenuVisible && !app.levelSelect && !app.passwordVisible && !app.goToDialogVisible &&
+            !app.settingsVisible && !app.helpVisible && !app.bestTimesVisible && app.gameBackground) {
+            SDL_SetTextureColorMod(app.gameBackground, 64, 84, 64);
+            SDL_SetTextureAlphaMod(app.gameBackground, 255);
             SDL_FRect backdrop{0.0F, 0.0F, static_cast<float>(outputWidth), static_cast<float>(outputHeight)};
-            constexpr float sourceWidth = 474.0F;
-            constexpr float sourceHeight = 392.0F;
-            SDL_FRect source{0.0F, 0.0F, sourceWidth, sourceHeight};
-            const float targetAspect = backdrop.w / backdrop.h;
-            const float sourceAspect = sourceWidth / sourceHeight;
-            if (targetAspect > sourceAspect) {
-                source.h = sourceWidth / targetAspect;
-                source.y = (sourceHeight - source.h) * 0.5F;
-            } else {
-                source.w = sourceHeight * targetAspect;
-                source.x = (sourceWidth - source.w) * 0.5F;
+            float sourceWidth = 0.0F;
+            float sourceHeight = 0.0F;
+            if (SDL_GetTextureSize(app.gameBackground, &sourceWidth, &sourceHeight) &&
+                sourceWidth > 0.0F && sourceHeight > 0.0F) {
+                SDL_FRect source{0.0F, 0.0F, sourceWidth, sourceHeight};
+                const float targetAspect = backdrop.w / backdrop.h;
+                const float sourceAspect = sourceWidth / sourceHeight;
+                if (targetAspect > sourceAspect) {
+                    source.h = sourceWidth / targetAspect;
+                    source.y = (sourceHeight - source.h) * 0.5F;
+                } else {
+                    source.w = sourceHeight * targetAspect;
+                    source.x = (sourceWidth - source.w) * 0.5F;
+                }
+                SDL_RenderTexture(app.renderer, app.gameBackground, &source, &backdrop);
             }
-            SDL_RenderTexture(app.renderer, app.menuBackground, &source, &backdrop);
-            SDL_SetTextureAlphaMod(app.menuBackground, 255);
-            SDL_SetTextureColorMod(app.menuBackground, 255, 255, 255);
+            SDL_SetTextureAlphaMod(app.gameBackground, 255);
+            SDL_SetTextureColorMod(app.gameBackground, 255, 255, 255);
         }
         const auto grid = levelGridLayout(outputWidth, outputHeight);
         const auto settingsLayout = settingsOverlayLayout(outputWidth, outputHeight);
@@ -1014,10 +1152,11 @@ void draw(App& app) {
                 debugPanelHeight = std::max(debugPanelHeight, 408.0F);
         }
         const float panelW = app.levelSelect ? grid.width
-            : std::min(app.debugVisible ? 640.0F : 520.0F, static_cast<float>(outputWidth) - 40.0F);
+            : std::min(app.goToDialogVisible ? 600.0F : app.debugVisible ? 640.0F : 520.0F,
+                       static_cast<float>(outputWidth) - 40.0F);
         const float panelH = app.levelSelect ? grid.height
-            : app.helpVisible ? 440.0F : app.debugVisible ? debugPanelHeight : app.bestTimesVisible ? 360.0F : app.settingsVisible ? settingsLayout.height
-            : app.passwordVisible ? 220.0F : app.mainMenuVisible ? 356.0F : 190.0F;
+            : app.goToDialogVisible ? 326.0F : app.helpVisible ? 440.0F : app.debugVisible ? debugPanelHeight : app.bestTimesVisible ? 360.0F : app.settingsVisible ? settingsLayout.height
+            : app.passwordVisible ? 220.0F : app.mainMenuVisible ? kMainMenuPanelHeight : 190.0F;
         const float panelLeft = app.levelSelect ? grid.left
             : app.settingsVisible ? settingsLayout.left : app.bestTimesVisible ? bestTimesLayout.left
             : (static_cast<float>(outputWidth) - panelW) * 0.5F;
@@ -1036,13 +1175,17 @@ void draw(App& app) {
         SDL_RenderFillRect(app.renderer, &cardLeft);
         SDL_RenderFillRect(app.renderer, &cardBottom);
         SDL_RenderFillRect(app.renderer, &cardRight);
-        if (app.mainMenuVisible && !app.levelSelect && !app.passwordVisible &&
+        if (app.mainMenuVisible && !app.levelSelect && !app.passwordVisible && !app.goToDialogVisible &&
             !app.settingsVisible && !app.helpVisible && !app.bestTimesVisible) {
             setColor(app.renderer, kCardCaption);
             SDL_FRect caption{panelLeft + 4.0F, panelTop + 4.0F, panelW - 8.0F, 28.0F};
             SDL_RenderFillRect(app.renderer, &caption);
             setColor(app.renderer, kCardText);
-            drawUiText(app.renderer, panelLeft + 14.0F, panelTop + 12.0F, "NATIVE REMAKE");
+            if (app.appIcon) {
+                const SDL_FRect logo{panelLeft + 9.0F, panelTop + 7.0F, 22.0F, 22.0F};
+                SDL_RenderTexture(app.renderer, app.appIcon, nullptr, &logo);
+            }
+            drawUiText(app.renderer, panelLeft + 40.0F, panelTop + 9.0F, "CHIP'S CHALLENGE");
         }
         setColor(app.renderer, kCardText);
         if (app.debugVisible) {
@@ -1071,6 +1214,7 @@ void draw(App& app) {
             };
             drawMediumUiText(app.renderer, panelLeft + 24.0F, panelTop + 18.0F,
                              "SIMULATION STATE  /  F8 / ESC / B TO CLOSE");
+            drawActionButton(app.renderer, dialogExitButton(panelLeft, panelTop, panelW), "X");
             drawMediumUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 52.0F,
                 "TICK %u   RNG %08X   OUTCOME %s   CAUSE %s", game.gameTicks,
                 static_cast<unsigned>(game.randomState), outcomeName(), deathCauseName());
@@ -1143,28 +1287,88 @@ void draw(App& app) {
                     "MORE: %u CREATURES  %u SLIPS",
                     static_cast<unsigned>(game.creatures.size() - creatureCount),
                     static_cast<unsigned>(game.slipOrder.size() - slipCount));
+        } else if (app.goToDialogVisible) {
+            setColor(app.renderer, kCardCaption);
+            SDL_FRect caption{panelLeft + 4.0F, panelTop + 4.0F, panelW - 8.0F, 32.0F};
+            SDL_RenderFillRect(app.renderer, &caption);
+            setColor(app.renderer, kCardText);
+            drawUiText(app.renderer, panelLeft + 18.0F, panelTop + 13.0F, "GO TO LEVEL");
+            drawActionButton(app.renderer, dialogExitButton(panelLeft, panelTop, panelW), "X");
+            drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 52.0F,
+                       "ENTER A LEVEL NUMBER AND PASSWORD, OR JUST A PASSWORD.");
+
+            constexpr float labelX = 28.0F;
+            const float fieldX = (panelW - kGoToFieldWidth) * 0.5F;
+            const float levelY = panelTop + 111.0F;
+            const float passwordY = panelTop + 166.0F;
+            setColor(app.renderer, kCardText);
+            drawUiText(app.renderer, panelLeft + labelX, levelY + 9.0F, "LEVEL NUMBER:");
+            drawUiText(app.renderer, panelLeft + labelX, passwordY + 9.0F, "PASSWORD:");
+            const SDL_FRect levelBox{panelLeft + fieldX, levelY, kGoToFieldWidth, kGoToFieldHeight};
+            const SDL_FRect passwordBox{panelLeft + fieldX, passwordY, kGoToFieldWidth, kGoToFieldHeight};
+            for (const auto& box : {levelBox, passwordBox}) {
+                setColor(app.renderer, SDL_Color{238, 238, 238, 255});
+                SDL_RenderFillRect(app.renderer, &box);
+                setColor(app.renderer, SDL_Color{108, 131, 142, 255});
+                SDL_RenderRect(app.renderer, &box);
+            }
+            setColor(app.renderer, SDL_Color{24, 31, 34, 255});
+            drawUiText(app.renderer, levelBox.x + 10.0F, levelBox.y + 11.0F,
+                       app.goToLevelInput.c_str());
+            drawUiText(app.renderer, passwordBox.x + 10.0F, passwordBox.y + 11.0F,
+                       app.goToPasswordInput.c_str());
+            const auto& activeBox = app.goToPasswordFocus ? passwordBox : levelBox;
+            const auto& activeText = app.goToPasswordFocus ? app.goToPasswordInput : app.goToLevelInput;
+            SDL_FRect caret{activeBox.x + 10.0F + measureBitmapText(activeText.c_str(), 1.75F),
+                            activeBox.y + 9.0F, 2.0F, 18.0F};
+            setColor(app.renderer, SDL_Color{24, 31, 34, 255});
+            SDL_RenderFillRect(app.renderer, &caret);
+
+            if (!app.goToDialogMessage.empty()) {
+                setColor(app.renderer, SDL_Color{255, 177, 138, 255});
+                drawSmallUiText(app.renderer, panelLeft + 28.0F, panelTop + 211.0F,
+                                app.goToDialogMessage.c_str());
+            }
+            const float buttonY = panelTop + 263.0F;
+            drawActionButton(app.renderer, SDL_FRect{panelLeft + 190.0F, buttonY, 96.0F, 38.0F},
+                             "OK", app.goToButtonSelection == 0);
+            drawActionButton(app.renderer, SDL_FRect{panelLeft + 316.0F, buttonY, 112.0F, 38.0F},
+                             "CANCEL", app.goToButtonSelection == 1);
         } else if (app.levelSelect) {
             const std::size_t pageCount = (app.levels.size() + kLevelSelectorPageSize - 1) /
                                           kLevelSelectorPageSize;
             const std::size_t page = app.selectedLevel / kLevelSelectorPageSize;
+            setColor(app.renderer, kCardCaption);
+            SDL_FRect levelHeader{panelLeft + 4.0F, panelTop + 4.0F, panelW - 8.0F, 36.0F};
+            SDL_RenderFillRect(app.renderer, &levelHeader);
+            setColor(app.renderer, kCardText);
+            drawUiText(app.renderer, panelLeft + 20.0F, panelTop + 13.0F, "CHOOSE A LEVEL");
+            drawActionButton(app.renderer, grid.exitButton, "X");
+
+            const auto selectedTitle = app.selectedLevel < app.levels.size()
+                ? app.levels[app.selectedLevel].title : std::string{};
+            drawUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 52.0F,
+                "LEVEL %03u  %.36s", static_cast<unsigned>(app.selectedLevel + 1),
+                selectedTitle.empty() ? "UNTITLED" : selectedTitle.c_str());
             if (pageCount > 1) {
-                drawUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 24.0F,
-                    "PAGE %u / %u", static_cast<unsigned>(page + 1),
-                    static_cast<unsigned>(pageCount));
+                drawUiTextFormat(app.renderer, panelLeft + panelW - 207.0F, panelTop + 54.0F,
+                    "PAGE %u / %u", static_cast<unsigned>(page + 1), static_cast<unsigned>(pageCount));
                 drawActionButton(app.renderer, grid.previousPageButton, "<");
                 drawActionButton(app.renderer, grid.nextPageButton, ">");
             } else {
-                drawUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 24.0F,
-                    "LEVEL PACK  PAGE %u / %u", static_cast<unsigned>(page + 1),
-                    static_cast<unsigned>(pageCount));
+                drawUiTextFormat(app.renderer, panelLeft + panelW - 207.0F, panelTop + 54.0F,
+                    "PAGE %u / %u", static_cast<unsigned>(page + 1), static_cast<unsigned>(pageCount));
             }
-            const auto selectedTitle = app.selectedLevel < app.levels.size()
-                ? app.levels[app.selectedLevel].title : std::string{};
-            drawUiTextFormat(app.renderer, panelLeft + 24.0F, panelTop + 44.0F,
-                "SELECTED %03u - %s", static_cast<unsigned>(app.selectedLevel + 1),
-                selectedTitle.empty() ? "UNTITLED" : selectedTitle.c_str());
-            drawUiText(app.renderer, panelLeft + 24.0F, panelTop + 64.0F,
-                                "GREEN COMPLETE  GOLD SELECTED  DARK NEEDS PASSWORD");
+            const auto drawLegendItem = [&](float x, const char* label, SDL_Color color) {
+                SDL_FRect marker{x, panelTop + 80.0F, 10.0F, 10.0F};
+                setColor(app.renderer, color);
+                SDL_RenderFillRect(app.renderer, &marker);
+                setColor(app.renderer, kCardMuted);
+                drawSmallUiText(app.renderer, x + 15.0F, panelTop + 77.0F, label);
+            };
+            drawLegendItem(panelLeft + 24.0F, "COMPLETED", SDL_Color{58, 126, 93, 255});
+            drawLegendItem(panelLeft + 132.0F, "SELECTED", SDL_Color{202, 156, 61, 255});
+            drawLegendItem(panelLeft + 230.0F, "PASSWORD", SDL_Color{32, 41, 48, 255});
             const std::size_t pageStart = page * kLevelSelectorPageSize;
             const std::size_t pageEnd = std::min(pageStart + kLevelSelectorPageSize, app.levels.size());
             for (std::size_t i = pageStart; i < pageEnd; ++i) {
@@ -1192,12 +1396,21 @@ void draw(App& app) {
                 }
                 setColor(app.renderer, passwordRequired && !selected
                     ? SDL_Color{132, 145, 151, 255} : SDL_Color{247, 249, 250, 255});
-                drawUiTextFormat(app.renderer, x + 5.0F, y + grid.cell * 0.5F - 4.0F,
-                                          "%03u", static_cast<unsigned>(i + 1));
+                std::array<char, 4> levelLabel{};
+                std::snprintf(levelLabel.data(), levelLabel.size(), "%03u", static_cast<unsigned>(i + 1));
+                const float labelWidth = measureBitmapText(levelLabel.data(), 1.75F);
+                drawUiText(app.renderer, x + (grid.cell - labelWidth) * 0.5F,
+                           y + grid.cell * 0.5F - 4.0F, levelLabel.data());
             }
             if (app.selectedLevel < app.levels.size()) {
                 const auto& selectedLevel = app.levels[app.selectedLevel];
                 const auto& bounds = grid.previewBounds;
+                SDL_FRect previewCard{bounds.x - 10.0F, bounds.y - 34.0F,
+                                      bounds.w + 20.0F, bounds.h + 118.0F};
+                setColor(app.renderer, SDL_Color{22, 34, 43, 255});
+                SDL_RenderFillRect(app.renderer, &previewCard);
+                setColor(app.renderer, SDL_Color{44, 62, 72, 255});
+                SDL_RenderRect(app.renderer, &previewCard);
                 SDL_FRect previewFrame{bounds.x - 4.0F, bounds.y - 4.0F,
                                        bounds.w + 8.0F, bounds.h + 8.0F};
                 setColor(app.renderer, SDL_Color{10, 17, 23, 255});
@@ -1214,7 +1427,7 @@ void draw(App& app) {
                 SDL_RenderFillRect(app.renderer, &previewBottom);
                 SDL_RenderFillRect(app.renderer, &previewRight);
                 setColor(app.renderer, kCardText);
-                drawUiText(app.renderer, bounds.x, bounds.y - 26.0F, "MAP PREVIEW");
+                drawMediumUiText(app.renderer, bounds.x, bounds.y - 27.0F, "MAP PREVIEW");
                 constexpr int previewCells = chips::kBoardWidth * chips::kBoardHeight;
                 const float previewCell = bounds.w / static_cast<float>(chips::kBoardWidth);
                 for (int position = 0; position < previewCells; ++position) {
@@ -1268,6 +1481,7 @@ void draw(App& app) {
                                 ? "CLICK A LEVEL OR PAGE ARROWS; ARROWS / PGUP / PGDN ALSO WORK"
                                 : "CLICK A LEVEL TO SELECT; ARROWS MOVE; ESC CLOSES");
         } else if (app.passwordVisible) {
+            drawActionButton(app.renderer, dialogExitButton(panelLeft, panelTop, panelW), "X");
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 30.0F, "ENTER LEVEL PASSWORD");
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 78.0F, "PASSWORD");
             SDL_FRect inputBox{panelLeft + 28.0F, panelTop + 102.0F, panelW - 56.0F, 38.0F};
@@ -1291,6 +1505,7 @@ void draw(App& app) {
             drawUiTextFormat(app.renderer, panelLeft + 28.0F, panelTop + 28.0F,
                 "BEST TIMES   PAGE %u / %u", static_cast<unsigned>(page + 1),
                 static_cast<unsigned>(pageCount));
+            drawActionButton(app.renderer, bestTimesLayout.exitButton, "X");
             if (pageCount > 1) {
                 drawActionButton(app.renderer, bestTimesLayout.previousPageButton, "<");
                 drawActionButton(app.renderer, bestTimesLayout.nextPageButton, ">");
@@ -1303,40 +1518,18 @@ void draw(App& app) {
                 if (seconds == 0xFFFFFFFFU) continue;
                 if (entry++ < firstEntry) continue;
                 drawUiTextFormat(app.renderer, panelLeft + 28.0F,
-                    panelTop + 64.0F + static_cast<float>(line) * 24.0F,
+                    panelTop + 82.0F + static_cast<float>(line) * 24.0F,
                     "%03u  %s  %02u:%02u", static_cast<unsigned>(i + 1),
                     app.levels[i].title.c_str(), seconds / 60, seconds % 60);
                 ++line;
             }
-            if (line == 0) drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 72.0F, "NO COMPLETED TIMES YET");
+            if (line == 0) drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 82.0F, "NO COMPLETED TIMES YET");
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + panelH - 30.0F,
                        pageCount > 1 ? "PGUP / PGDN OR L / R   CLICK ARROWS   ESC CLOSES"
                                      : "PGUP / PGDN OR L / R   ESC CLOSES");
-        } else if (app.helpVisible) {
-            drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 28.0F, "HOW TO PLAY  /  CONTROLS");
-            constexpr std::array<const char*, 17> helpLines{
-                "ARROWS / WASD / D-PAD / STICK: MOVE",
-                "CLICK A TILE TO WALK TO IT",
-                "[ / ]: PREVIOUS / NEXT LEVEL; L: LEVELS",
-                "R: RESTART  P / START: PAUSE",
-                "ENTER / A: NEXT OR RETRY LEVEL",
-                "F11: FULLSCREEN  O: SETTINGS  F8: DEBUG",
-                "GOAL: COLLECT THE REQUIRED CHIPS",
-                "PASS THE SOCKET, THEN REACH THE EXIT",
-                "MATCH EACH KEY COLOR TO ITS DOOR",
-                "FLIPPERS: WATER  FIRE BOOTS: FIRE",
-                "SKATES: ICE  SUCTION BOOTS: FORCE FLOORS",
-                "PUSH BLOCKS; YOU CANNOT PULL THEM",
-                "CREATURES ARE DANGEROUS; USE TERRAIN WISELY",
-                "HINTS AND PASSWORDS CAN HELP",
-                "OVERLAYS: ARROWS/WASD; ENTER/SPACE",
-                "MOUSE HOVER/CLICK; D-PAD/STICK + A",
-                "F1 / ESC / B: BACK  FOCUS LOSS PAUSES PLAY"};
-            for (std::size_t i = 0; i < helpLines.size(); ++i)
-                drawUiText(app.renderer, panelLeft + 28.0F,
-                           panelTop + 64.0F + static_cast<float>(i) * 21.0F, helpLines[i]);
         } else if (app.settingsVisible) {
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 28.0F, "SETTINGS");
+            drawActionButton(app.renderer, dialogExitButton(panelLeft, panelTop, panelW), "X");
             drawUiTextFormat(app.renderer, panelLeft + 28.0F, panelTop + 76.0F,
                 "SOUND EFFECTS   %s", app.profile.effectsMuted ? "MUTED" : "ON");
             drawUiTextFormat(app.renderer, panelLeft + 28.0F, panelTop + 108.0F,
@@ -1373,18 +1566,16 @@ void draw(App& app) {
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 472.0F, "F11           Toggle fullscreen");
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 496.0F, "CLICK AUDIO ROWS TO MUTE");
         } else if (app.mainMenuVisible) {
-            if (app.appIcon) {
-                SDL_FRect logo{panelLeft + 28.0F, panelTop + 42.0F, 48.0F, 48.0F};
-                SDL_RenderTexture(app.renderer, app.appIcon, nullptr, &logo);
-            }
-            drawUiText(app.renderer, panelLeft + 92.0F, panelTop + 58.0F, "CHIP'S CHALLENGE");
             constexpr std::array<const char*, 7> menuItems{
                 "CONTINUE LEVEL", "NEW GAME (LEVEL 1)", "CAMPAIGN LEVELS", "ENTER PASSWORD",
                 "SETTINGS", "CONTROLS", "QUIT"};
             for (std::size_t i = 0; i < menuItems.size(); ++i) {
-                const float rowY = panelTop + 100.0F + static_cast<float>(i) * 32.0F;
+                const float rowY = panelTop + kMainMenuFirstItemY +
+                    static_cast<float>(i) * kMainMenuItemRowStep;
                 if (i == app.menuSelection) {
-                    SDL_FRect selectedRow{panelLeft + 20.0F, rowY - 5.0F, panelW - 40.0F, 28.0F};
+                    SDL_FRect selectedRow{panelLeft + 20.0F,
+                        rowY + kMainMenuSelectionOffsetY, panelW - 40.0F,
+                        kMainMenuSelectionHeight};
                     setColor(app.renderer, kCardSelection);
                     SDL_RenderFillRect(app.renderer, &selectedRow);
                     setColor(app.renderer, kCardText);
@@ -1393,11 +1584,10 @@ void draw(App& app) {
                 }
                 drawUiText(app.renderer, panelLeft + 36.0F, rowY, menuItems[i]);
             }
-            drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 324.0F,
-                       "ARROWS / D-PAD OR MOUSE; ENTER / A");
         } else {
             drawUiText(app.renderer, panelLeft + 28.0F, panelTop + 28.0F, "PAUSED");
             const auto pauseLayout = pauseOverlayLayout(outputWidth, outputHeight);
+            drawActionButton(app.renderer, pauseLayout.exitButton, "X");
             constexpr std::array<const char*, 3> labels{"RESUME", "RESTART LEVEL", "SHOW CONTROLS"};
             for (std::size_t i = 0; i < pauseLayout.buttonCount; ++i)
                 drawActionButton(app.renderer, pauseLayout.buttons[i], labels[i],
@@ -1415,8 +1605,8 @@ void draw(App& app) {
         const std::string password = "Password: " +
             (level.password.empty() ? std::string("----") : level.password);
         const float textPixelSize = std::max(1.0F, static_cast<float>(board.cell) * 0.05F);
-        const float textWidth = static_cast<float>(std::max(title.size(), password.size())) *
-                                6.0F * textPixelSize;
+        const float textWidth = std::max(measureBitmapText(title.c_str(), textPixelSize),
+                                         measureBitmapText(password.c_str(), textPixelSize));
         const float placardWidth = std::min(static_cast<float>(board.width) -
                                                 static_cast<float>(board.cell) * 0.4F,
                                             std::max(static_cast<float>(board.cell) * 5.75F,
@@ -1452,10 +1642,10 @@ void draw(App& app) {
         SDL_RenderFillRect(app.renderer, &innerTop);
         setColor(app.renderer, SDL_Color{255, 245, 20, 255});
         drawBitmapText(app.renderer,
-                       placard.x + (placard.w - static_cast<float>(title.size()) * 6.0F * textPixelSize) * 0.5F,
+                       placard.x + (placard.w - measureBitmapText(title.c_str(), textPixelSize)) * 0.5F,
                        placard.y + placardHeight * 0.16F, title.c_str(), textPixelSize);
         drawBitmapText(app.renderer,
-                       placard.x + (placard.w - static_cast<float>(password.size()) * 6.0F * textPixelSize) * 0.5F,
+                       placard.x + (placard.w - measureBitmapText(password.c_str(), textPixelSize)) * 0.5F,
                        placard.y + placardHeight * 0.56F, password.c_str(), textPixelSize);
     }
     if (app.game.outcome != chips::Outcome::playing && !app.paused && !app.helpVisible && !app.bestTimesVisible &&
@@ -1496,7 +1686,7 @@ void draw(App& app) {
             setColor(app.renderer, SDL_Color{16, 16, 16, 255});
             drawUiText(app.renderer, cardX + 11.0F, cardY + 8.0F,
                        "LEVEL COMPLETE!");
-            SDL_FRect closeButton{cardX + card.w - 25.0F, cardY + 5.0F, 17.0F, 17.0F};
+            const SDL_FRect closeButton = resultLayout.exitButton;
             setColor(app.renderer, SDL_Color{212, 212, 212, 255});
             SDL_RenderFillRect(app.renderer, &closeButton);
             setColor(app.renderer, SDL_Color{48, 48, 48, 255});
@@ -1543,12 +1733,17 @@ void draw(App& app) {
             SDL_RenderFillRect(app.renderer, &buttonRight);
             setColor(app.renderer, SDL_Color{16, 16, 16, 255});
             const char* buttonLabel = "ONWARD!";
-            const float labelWidth = static_cast<float>(std::char_traits<char>::length(buttonLabel)) * 12.0F;
-            drawUiText(app.renderer, onward.x + (onward.w - labelWidth) * 0.5F,
-                       onward.y + 5.0F, buttonLabel);
+            constexpr float buttonTextSize = 1.8F;
+            const float labelWidth = measureBitmapText(buttonLabel, buttonTextSize);
+            const float labelHeight = measureBitmapTextHeight(buttonLabel, buttonTextSize);
+            drawBitmapText(app.renderer,
+                onward.x + (onward.w - labelWidth) * 0.5F,
+                onward.y + (onward.h - labelHeight) * 0.5F,
+                buttonLabel, buttonTextSize);
         } else {
         setColor(app.renderer, SDL_Color{28, 42, 51, 250});
         SDL_RenderFillRect(app.renderer, &card);
+        drawActionButton(app.renderer, resultLayout.exitButton, "X");
         if (app.atlas &&
                    chips::showLossIllustration(app.game.outcome == chips::Outcome::timedOut)) {
             const std::uint8_t deathTile = app.game.deathCause == chips::DeathCause::water ? 0x33
@@ -1571,39 +1766,63 @@ void draw(App& app) {
         SDL_SetRenderDrawBlendMode(app.renderer, SDL_BLENDMODE_NONE);
     }
     if (app.topMenuOpen >= 0) {
-        static constexpr std::array<std::array<const char*, 4>, 4> items{{
-            {{"New Game              F2", "Pause                   F3", "Best Times...", "Exit"}},
-            {{"Sound and Display...", "Controls...", "", ""}},
-            {{"Choose Level...", "Enter Password...", "Open Level Pack...", ""}},
-            {{"Controls", "About Chip's Challenge", "", ""}}}};
-        static constexpr std::array<float, 4> left{0.0F, 84.0F, 194.0F, 278.0F};
-        static constexpr std::array<float, 4> widths{188.0F, 196.0F, 190.0F, 212.0F};
+        static constexpr std::array<std::array<const char*, 7>, 4> items{{
+            {{"New Game", "Pause", "Best Times...", "Exit", "", ""}},
+            {{"Background Music", "Sound Effects", "Color", "More Options...", "", ""}},
+            {{"Restart", "Next", "Previous", "Go To...", "Open Level Pack...", "Choose Level...", ""}},
+            {{"Contents", "How to Play", "Commands", "How to Use Help", "About Chip's Challenge...", "", ""}}}};
+        static constexpr std::array<std::array<const char*, 7>, 4> shortcuts{{
+            {{"F2", "F3", "", "", "", "", ""}},
+            {{"", "", "", "", "", "", ""}},
+            {{"Ctrl+R", "Ctrl+N", "Ctrl+P", "", "", "", ""}},
+            {{"F1", "", "", "", "", "", ""}}}};
+        static constexpr std::array<float, 4> left{0.0F, 70.0F, 162.0F, 246.0F};
+        static constexpr std::array<float, 4> widths{194.0F, 220.0F, 220.0F, 280.0F};
         const int menu = app.topMenuOpen;
         const std::size_t count = static_cast<std::size_t>(topMenuItemCount(menu));
-        SDL_FRect drop{left[menu], 26.0F, widths[menu], static_cast<float>(count) * 24.0F + 4.0F};
-        setColor(app.renderer, kCard);
+        SDL_FRect drop{left[menu], kTopMenuDropTop, widths[menu], static_cast<float>(count) * kTopMenuRowHeight + 2.0F};
+        setColor(app.renderer, kClassicMenu);
         SDL_RenderFillRect(app.renderer, &drop);
-        setColor(app.renderer, kCardEdge);
-        SDL_FRect topEdge{drop.x, drop.y, drop.w, 2.0F};
-        SDL_RenderFillRect(app.renderer, &topEdge);
-        setColor(app.renderer, kCardEdge);
-        SDL_FRect rightEdge{drop.x + drop.w - 2.0F, drop.y, 2.0F, drop.h};
-        SDL_RenderFillRect(app.renderer, &rightEdge);
+        setColor(app.renderer, kClassicMenuBorder);
+        SDL_RenderRect(app.renderer, &drop);
         for (std::size_t i = 0; i < count; ++i) {
-            const float rowY = drop.y + 6.0F + static_cast<float>(i) * 24.0F;
+            const float rowY = drop.y + 5.0F + static_cast<float>(i) * kTopMenuRowHeight;
             const bool selected = static_cast<int>(i) == app.topMenuSelection;
             if (selected) {
-                SDL_FRect selected{drop.x + 3.0F, rowY - 3.0F, drop.w - 8.0F, 22.0F};
-                setColor(app.renderer, kCardSelection);
-                SDL_RenderFillRect(app.renderer, &selected);
+                SDL_FRect selectedRow{drop.x + 2.0F, rowY - 3.0F, drop.w - 4.0F, kTopMenuRowHeight};
+                setColor(app.renderer, kClassicMenuHighlight);
+                SDL_RenderFillRect(app.renderer, &selectedRow);
             }
-            if (menu == 0 && i == 3) {
-                setColor(app.renderer, SDL_Color{128, 128, 128, 255});
-                SDL_FRect separator{drop.x + 8.0F, rowY - 4.0F, drop.w - 18.0F, 1.0F};
+            const bool separatorBefore = (menu == 0 && i == 3) ||
+                (menu == 1 && i == 3) || (menu == 2 && i == 4) || (menu == 3 && i == 4);
+            if (separatorBefore) {
+                setColor(app.renderer, SDL_Color{190, 190, 190, 255});
+                SDL_FRect separator{drop.x + 5.0F, rowY - 5.0F, drop.w - 10.0F, 1.0F};
                 SDL_RenderFillRect(app.renderer, &separator);
             }
-            setColor(app.renderer, selected ? kCardText : kCardMuted);
-            drawUiText(app.renderer, drop.x + 12.0F, rowY, items[menu][i]);
+            const SDL_Color rowColor = selected ? SDL_Color{255, 255, 255, 255} : kClassicMenuText;
+            const bool checked = (menu == 1 && ((i == 0 && !app.profile.musicMuted) ||
+                (i == 1 && !app.profile.effectsMuted) || i == 2));
+            if (checked) {
+                setColor(app.renderer, rowColor);
+                SDL_FRect checkA{drop.x + 8.0F, rowY + 6.0F, 2.0F, 5.0F};
+                SDL_FRect checkB{drop.x + 10.0F, rowY + 9.0F, 3.0F, 2.0F};
+                SDL_FRect checkC{drop.x + 13.0F, rowY + 5.0F, 2.0F, 6.0F};
+                SDL_RenderFillRect(app.renderer, &checkA);
+                SDL_RenderFillRect(app.renderer, &checkB);
+                SDL_RenderFillRect(app.renderer, &checkC);
+            }
+            setColor(app.renderer, rowColor);
+            constexpr float menuTextSize = 1.5F;
+            const float menuTextY = rowY + (kTopMenuRowHeight -
+                measureBitmapTextHeight(items[menu][i], menuTextSize)) * 0.5F;
+            drawBitmapText(app.renderer, drop.x + 23.0F, menuTextY, items[menu][i], menuTextSize);
+            const char* shortcut = shortcuts[menu][i];
+            if (shortcut[0]) {
+                const float shortcutWidth = measureBitmapText(shortcut, menuTextSize);
+                drawBitmapText(app.renderer, drop.x + drop.w - shortcutWidth - 10.0F,
+                               menuTextY, shortcut, menuTextSize);
+            }
         }
     }
     SDL_SetRenderScale(app.renderer, 1.0F, 1.0F);

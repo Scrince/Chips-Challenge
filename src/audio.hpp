@@ -7,6 +7,10 @@
 #include <cstddef>
 #include <vector>
 
+#ifdef __APPLE__
+#include <AudioToolbox/AudioToolbox.h>
+#endif
+
 namespace chips {
 enum class AudioCue { move, blocked, pickup, keyPickup, bootPickup, switchTile, teleport, death, levelComplete,
                       door, thief, splash };
@@ -52,6 +56,14 @@ private:
     Uint64 nextMidiStatusCheck_{};
     Uint64 midiTrackStartedAt_{};
     Uint64 midiTrackLengthMs_{};
+#elif defined(__APPLE__)
+    MusicSequence musicSequence_{};
+    MusicPlayer musicPlayer_{};
+    AUGraph musicGraph_{};
+    AudioUnit musicSynth_{};
+    MusicTimeStamp midiTrackLengthBeats_{};
+    bool midiOpen_{};
+    bool midiPlaying_{};
 #endif
 };
 }

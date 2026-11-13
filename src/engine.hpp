@@ -124,7 +124,11 @@ struct GameState {
     // one direction for the next eligible tick.
     [[nodiscard]] MoveResult pressMove(Direction direction);
     void setMouseTarget(int position);
-    void advanceTicks(unsigned ticks = 1);
+    void advanceTicks(unsigned ticks = 1, bool advancePlayerOnWorldTick = true);
+    // Optional faster-player mode: consume one queued Chip action independently
+    // from the 110 ms world clock. Creature, block, and timer steps remain in
+    // advanceTicks().
+    void advancePlayerCadence();
     [[nodiscard]] MoveResult move(Direction direction);
     [[nodiscard]] MoveResult move(char direction);
     void restart();

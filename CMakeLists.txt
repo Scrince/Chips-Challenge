@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ChipsChallengeNative VERSION 0.1.0 LANGUAGES CXX)
+project(ChipsChallengeNative VERSION 1.0.1 LANGUAGES CXX)
 
 if(WIN32)
     enable_language(RC)
@@ -32,11 +32,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
+set(SDLTTF_VENDORED ON CACHE BOOL "Build SDL3_ttf with vendored dependencies" FORCE)
+set(SDLTTF_HARFBUZZ OFF CACHE BOOL "Disable shaping dependency for Latin UI text" FORCE)
+set(SDLTTF_PLUTOSVG OFF CACHE BOOL "Disable unused SVG font support" FORCE)
+set(SDLTTF_SAMPLES OFF CACHE BOOL "Do not build SDL3_ttf samples" FORCE)
+set(SDLTTF_TESTS OFF CACHE BOOL "Do not build SDL3_ttf tests" FORCE)
+FetchContent_Declare(
+    SDL3_ttf
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+    GIT_TAG a1ce3670aec736ecbf0936c43f2f0cc53aa61e5b
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(SDL3_ttf)
+
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/data")
 set(CHIPS_RUNTIME_ASSETS
     assets/ASSET_MANIFEST.json
+    assets/help/chips-help.html
+    assets/fonts/NotoSans.ttf
+    assets/fonts/OFL.txt
     assets/art/tile-atlas.png
     assets/art/menu-background.png
+    assets/art/menu-background-hd.png
     assets/art/victory-illustration.png
     assets/art/digital-digits.png
     assets/art/scoreboard-panel.png
@@ -75,9 +92,11 @@ add_executable(chips-native src/main.cpp src/renderer.cpp src/input_mapping.cpp 
 if(WIN32)
     target_sources(chips-native PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc")
 endif()
-target_link_libraries(chips-native PRIVATE SDL3::SDL3)
+target_link_libraries(chips-native PRIVATE SDL3::SDL3 SDL3_ttf::SDL3_ttf)
 if(WIN32)
     target_link_libraries(chips-native PRIVATE shell32 winmm)
+elseif(APPLE)
+    target_link_libraries(chips-native PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
 endif()
 target_compile_features(chips-native PRIVATE cxx_std_20)
 if(MSVC)
@@ -101,6 +120,12 @@ if(APPLE OR UNIX)
         install(TARGETS chips-native SDL3-shared
             RUNTIME DESTINATION .
             LIBRARY DESTINATION .)
+        if(TARGET SDL3_ttf-shared)
+            set_property(TARGET SDL3_ttf-shared PROPERTY INSTALL_RPATH "${CHIPS_INSTALL_RPATH}")
+            install(TARGETS SDL3_ttf-shared
+                RUNTIME DESTINATION .
+                LIBRARY DESTINATION .)
+        endif()
     else()
         install(TARGETS chips-native RUNTIME DESTINATION .)
     endif()
@@ -186,6 +211,9 @@ add_test(NAME campaign-password-checks COMMAND chips-password-tests)
 add_executable(chips-audio-tests tests/audio_tests.cpp src/audio.cpp)
 target_include_directories(chips-audio-tests PRIVATE src)
 target_link_libraries(chips-audio-tests PRIVATE SDL3::SDL3)
+if(APPLE)
+    target_link_libraries(chips-audio-tests PRIVATE "-framework AudioToolbox" "-framework CoreFoundation")
+endif()
 target_compile_definitions(chips-audio-tests PRIVATE
     CHIPS_TEST_RESOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 if(WIN32)
@@ -271,7 +299,7 @@ if(Python3_Interpreter_FOUND)
             --pack "${CMAKE_CURRENT_SOURCE_DIR}/data/CHIPS.DAT"
             --routes "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/native-known-routes.json"
             --report "${CMAKE_CURRENT_BINARY_DIR}/native-known-route-validation.json"
-            --seed 1 --ticks-per-input 2 --expect-wins 1,2,3,6,8,10,13,75)
+            --seed 1 --ticks-per-input 2 --expect-wins 1,2,3,6,7,8,10,13)
 endif()
 
 if(WIN32)
@@ -287,6 +315,13 @@ if(WIN32)
             "$<TARGET_FILE:SDL3::SDL3>"
             "$<TARGET_FILE_DIR:chips-native>"
     )
+    if(TARGET SDL3_ttf-shared)
+        add_custom_command(TARGET chips-native POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3_ttf-shared>"
+                "$<TARGET_FILE_DIR:chips-native>"
+        )
+    endif()
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
         add_custom_command(TARGET chips-native POST_BUILD

@@ -11,6 +11,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
+#elif defined(__APPLE__)
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreFoundation/CoreFoundation.h>
 #endif
 
 namespace chips {
@@ -79,13 +82,9 @@ bool queryMciNumber(const std::wstring& command, Uint64& value) {
 AudioSystem::~AudioSystem() { shutdown(); }
 
 void AudioSystem::shutdown() {
+    stopMusic();
 #ifdef _WIN32
-    if (midiOpen_) {
-        sendMci(L"stop chips_native_music");
-        sendMci(L"close chips_native_music");
-        midiOpen_ = false;
-        midiPlaying_ = false;
-    }
+    // stopMusic closes the active MCI sequence.
 #endif
     for (auto& samples : effects_) samples.clear();
     if (stream_) {
@@ -195,6 +194,88 @@ void AudioSystem::startMusic(unsigned levelNumber) {
     SDL_Log("Loaded MIDI background track length: %llu ms",
             static_cast<unsigned long long>(midiTrackLengthMs_));
     updateMusicGain();
+#elif defined(__APPLE__)
+    stopMusic();
+    const auto filename = (levelNumber % 2 == 0) ? "CHIP02.MID" : "CHIP01.MID";
+    const auto audioFile = resourceRoot_ / "assets" / "audio" / filename;
+    if (!std::filesystem::is_regular_file(audioFile)) {
+        SDL_Log("Background MIDI file is missing: %s", pathToUtf8(audioFile).c_str());
+        return;
+    }
+
+    const auto pathUtf8 = pathToUtf8(audioFile);
+    CFURLRef fileUrl = CFURLCreateFromFileSystemRepresentation(
+        kCFAllocatorDefault, reinterpret_cast<const UInt8*>(pathUtf8.data()),
+        static_cast<CFIndex>(pathUtf8.size()), false);
+    if (!fileUrl) {
+        SDL_Log("Could not create a file URL for background MIDI: %s", pathUtf8.c_str());
+        return;
+    }
+
+    OSStatus status = NewMusicSequence(&musicSequence_);
+    if (status == noErr)
+        status = MusicSequenceFileLoad(musicSequence_, fileUrl, kMusicSequenceFile_MIDIType,
+                                       kMusicSequenceLoadSMF_ChannelsToTracks);
+    CFRelease(fileUrl);
+    if (status != noErr) {
+        SDL_Log("Could not load background MIDI %s (AudioToolbox error %d)",
+                pathUtf8.c_str(), static_cast<int>(status));
+        stopMusic();
+        return;
+    }
+
+    UInt32 trackCount{};
+    status = MusicSequenceGetTrackCount(musicSequence_, &trackCount);
+    if (status == noErr) {
+        for (UInt32 index = 0; index < trackCount; ++index) {
+            MusicTrack track{};
+            MusicTimeStamp trackLength{};
+            UInt32 propertySize = sizeof(trackLength);
+            status = MusicSequenceGetIndTrack(musicSequence_, index, &track);
+            if (status != noErr) break;
+            status = MusicTrackGetProperty(track, kSequenceTrackProperty_TrackLength,
+                                           &trackLength, &propertySize);
+            if (status != noErr) break;
+            midiTrackLengthBeats_ = std::max(midiTrackLengthBeats_, trackLength);
+        }
+    }
+    if (status == noErr && midiTrackLengthBeats_ <= 0.0) {
+        SDL_Log("Background MIDI %s has no playable track length", filename);
+        stopMusic();
+        return;
+    }
+
+    if (status == noErr) status = MusicSequenceGetAUGraph(musicSequence_, &musicGraph_);
+    if (status == noErr) status = AUGraphOpen(musicGraph_);
+    if (status == noErr) status = AUGraphInitialize(musicGraph_);
+    if (status == noErr) {
+        UInt32 nodeCount{};
+        status = AUGraphGetNodeCount(musicGraph_, &nodeCount);
+        for (UInt32 index = 0; status == noErr && index < nodeCount; ++index) {
+            AUNode node{};
+            AudioComponentDescription description{};
+            status = AUGraphGetIndNode(musicGraph_, index, &node);
+            if (status == noErr) status = AUGraphNodeInfo(musicGraph_, node, &description,
+                                                          &musicSynth_);
+            if (status == noErr && description.componentType == kAudioUnitType_MusicDevice)
+                break;
+            musicSynth_ = nullptr;
+        }
+        if (status == noErr && !musicSynth_) status = kAudioToolboxError_NoTrackDestination;
+    }
+    if (status == noErr) status = NewMusicPlayer(&musicPlayer_);
+    if (status == noErr) status = MusicPlayerSetSequence(musicPlayer_, musicSequence_);
+    if (status == noErr) status = AUGraphStart(musicGraph_);
+    if (status != noErr) {
+        SDL_Log("Could not initialize macOS MIDI playback (AudioToolbox error %d)",
+                static_cast<int>(status));
+        stopMusic();
+        return;
+    }
+
+    midiOpen_ = true;
+    SDL_Log("Loaded macOS background MIDI track %s", filename);
+    updateMusicGain();
 #else
     (void)levelNumber;
 #endif
@@ -209,6 +290,30 @@ void AudioSystem::stopMusic() {
         midiPlaying_ = false;
         midiTrackLengthMs_ = 0;
     }
+#elif defined(__APPLE__)
+    if (musicPlayer_) {
+        if (midiPlaying_) MusicPlayerStop(musicPlayer_);
+        DisposeMusicPlayer(musicPlayer_);
+        musicPlayer_ = nullptr;
+    }
+    if (musicGraph_) {
+        AUGraphStop(musicGraph_);
+        AUGraphUninitialize(musicGraph_);
+        AUGraphClose(musicGraph_);
+    }
+    if (musicSequence_) {
+        MusicSequenceSetAUGraph(musicSequence_, nullptr);
+        DisposeMusicSequence(musicSequence_);
+        musicSequence_ = nullptr;
+    }
+    if (musicGraph_) {
+        DisposeAUGraph(musicGraph_);
+        musicGraph_ = nullptr;
+    }
+    musicSynth_ = nullptr;
+    midiTrackLengthBeats_ = 0.0;
+    midiOpen_ = false;
+    midiPlaying_ = false;
 #endif
 }
 
@@ -247,6 +352,17 @@ void AudioSystem::update() {
             midiPlaying_ = false;
             SDL_Log("Unable to restart the level's MIDI background music.");
         }
+    }
+#elif defined(__APPLE__)
+    if (!midiOpen_ || !midiPlaying_ || !musicPlayer_) return;
+    MusicTimeStamp currentBeat{};
+    if (MusicPlayerGetTime(musicPlayer_, &currentBeat) == noErr &&
+        currentBeat >= midiTrackLengthBeats_) {
+        const auto seekStatus = MusicPlayerSetTime(musicPlayer_, 0.0);
+        const auto startStatus = seekStatus == noErr ? MusicPlayerStart(musicPlayer_) : seekStatus;
+        if (startStatus != noErr)
+            SDL_Log("Could not loop macOS background MIDI (AudioToolbox error %d)",
+                    static_cast<int>(startStatus));
     }
 #endif
 }
@@ -294,6 +410,28 @@ void AudioSystem::updateMusicGain() {
             nextMidiStatusCheck_ = SDL_GetTicks() + 250;
             midiTrackStartedAt_ = SDL_GetTicks();
         }
+    }
+#elif defined(__APPLE__)
+    if (!midiOpen_ || !musicPlayer_) return;
+    const bool shouldPlay = !musicMuted_ && musicVolume_ > 0.0F;
+    if (musicSynth_) {
+        const auto linearVolume = shouldPlay ? musicVolume_ : 0.0F;
+        const auto decibels = linearVolume > 0.0F ? 20.0F * std::log10(linearVolume) : -120.0F;
+        const auto status = AudioUnitSetParameter(musicSynth_, kMusicDeviceParam_Volume,
+                                                  kAudioUnitScope_Global, 0, decibels, 0);
+        if (status != noErr)
+            SDL_Log("Could not set macOS background music volume (AudioToolbox error %d)",
+                    static_cast<int>(status));
+    }
+    if (shouldPlay && !midiPlaying_) {
+        const auto seekStatus = MusicPlayerSetTime(musicPlayer_, 0.0);
+        const auto startStatus = seekStatus == noErr ? MusicPlayerStart(musicPlayer_) : seekStatus;
+        if (startStatus == noErr) midiPlaying_ = true;
+        else SDL_Log("Could not start macOS background MIDI (AudioToolbox error %d)",
+                     static_cast<int>(startStatus));
+    } else if (!shouldPlay && midiPlaying_) {
+        MusicPlayerStop(musicPlayer_);
+        midiPlaying_ = false;
     }
 #endif
 }

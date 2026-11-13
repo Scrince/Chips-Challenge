@@ -16,6 +16,10 @@ Swimming Chip uses original opaque atlas tiles `0x3C`–`0x3F`, which include th
 
 ## Interface art
 
-The title background is the original `BACKGROUND.bmp` circuit board, converted 2× and dimmed behind the modern menu card. Win cards use original `CHIPEND.bmp`; the scoreboard uses original `200.bmp` with its black field made transparent. `app-icon.png` and `app-icon.ico` retain the exact original icon. The window and Windows executable use the checked-in cleaned variants `app-icon-polished.png` and `app-icon-polished.ico`, mapped from the same original image and included in the manifest with hashes.
+The title background source is the original `BACKGROUND.bmp` circuit board. Win cards use original `CHIPEND.bmp`; the scoreboard uses original `200.bmp` with its black field made transparent. `app-icon.png` and `app-icon.ico` retain the exact original icon. The window and Windows executable use the checked-in cleaned variants `app-icon-polished.png` and `app-icon-polished.ico`, mapped from the same original image and included in the manifest with hashes.
+
+The menu and gameplay use `menu-background-hd.png` as a smooth, full-window circuit-board backdrop behind the menu card, board, and scoreboard. It is a high-resolution generated recreation of the original background; `menu-background.png` remains unchanged as the source/reference image. The generated background is linearly filtered when scaled to the window and has its own manifest hash.
+
+Interface text uses the bundled Noto Sans variable font (`fonts/NotoSans.ttf`) rendered with SDL3_ttf and light hinting. This replaces the custom block bitmap face for menus, prompts, dialogs, help, and result cards. The original digital scoreboard numerals and pixel-art sprites remain unchanged. Noto Sans is distributed under the SIL Open Font License; the license is included in `fonts/OFL.txt`.
 
 The renderer uses nearest-neighbor scaling for original pixel art. It does not ship the prior image-generated player, key, boot, or creature replacements. Source files, executable, disassembly, and original audio are not runtime dependencies. Audio remains synthesized by the project and documented in `AUDIO.md`.

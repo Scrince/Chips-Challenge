@@ -14,11 +14,13 @@ The application presents win, death, and timeout states in a result card with th
 
 The title menu provides separate **Continue Level** and **New Game (Level 1)** actions. New Game is available by mouse, keyboard/gamepad menu navigation, or F2; it starts the first campaign level without clearing saved progress.
 
-The current Windows x64 Release package is `dist/chips-native-windows-x64-Release.zip`, built and validated with `scripts/build-windows.ps1`. It contains the native executable, SDL3/runtime DLLs, campaign data, and authored/converted art assets. SHA-256: `28BCF87DA1ABAF6364052357852D2D8C2B3BC294D31C35D3D7E7F6D252290DA0`. macOS/Linux builds remain unverified on this host.
+Menus, prompts, help, and result dialogs use bundled Noto Sans rendered with antialiasing. Pixel-art sprites and the digital scoreboard remain pixel-based.
+
+The current Windows x64 V1.0.1 package is `dist/chips-native-windows-x64-Release.zip`, built with `scripts/build-windows.ps1`. It includes the game, runtime libraries, campaign data, art assets, Noto Sans, and the offline HTML help manual. SHA-256: `26707994E3F18BC6F112DB213F230471BB47930D9C954C27B4D796550AC4EA39`. See [`CHANGELOG.md`](CHANGELOG.md) for release changes. macOS/Linux builds remain unverified on this host.
 
 An active level pauses automatically when the window loses focus or is minimized. Explicit pause works from the keyboard, gamepad, or menu. Every pause discards movement waiting in the input buffer and clears controller repeat state; a stick or D-pad direction held through the pause is ignored until released. Play resumes only when the player chooses Resume or presses the pause control.
 
-The in-game Help panel combines keyboard/controller/mouse controls with the objective and quick guidance for chips, sockets, keys, boots, blocks, creatures, hints, and password-gated campaign levels. It also explains pause/result menu navigation and focus-loss pausing. Clicking a board tile sets a destination for classic axis-prioritized mouse movement; a teal marker shows the selected destination, and keyboard/gamepad movement cancels it. The password prompt can be canceled with Escape.
+The Help menu and F1 open a bundled offline HTML manual with the original WinHelp topics and illustrations, searchable contents, and links between topics. It requires no legacy Windows Help viewer. Clicking a board tile sets a destination for classic axis-prioritized mouse movement; a teal marker shows the selected destination, and keyboard/gamepad movement cancels it. The password prompt can be canceled with Escape.
 
 The Level menu includes **Open Level Pack...** for selecting a compatible `CHIPS.DAT` through the native file picker. A pack is decoded before it replaces the current game; invalid packs leave the active campaign intact. Each pack keeps its own progress profile keyed to the pack contents. This action is also available from the command line by passing the pack path as the first argument.
 
@@ -29,7 +31,7 @@ Creature teleporter exit selection now mirrors the original `EnterTeleport` argu
 
 Result cards use the supplied original art: `CHIPEND.bmp` on wins and the atlas splash, burned-Chip, or skeleton pose for deaths. Timeouts show the message without a death illustration, matching the original timeout path. Messages stay in a separate text column beside any illustration.
 
-The title menu now uses the supplied game's original green circuit-board backdrop, converted to RGBA with the existing nearest-neighbor art pipeline. It is dimmed behind the slate menu card and cropped without stretching at different window sizes. The Windows Release target built successfully and the menu was visually reviewed at 1024x688. Tests were not run.
+The title menu, gameplay, and scoreboard use the same smooth high-resolution recreation of the original green circuit-board background. The menu version is dimmed behind the slate menu card; both views crop to fill the window without stretching. The original low-resolution art remains unchanged as the source/reference image.
 
 Added an opt-in F8 simulation inspector for tick/RNG/outcome/death cause, player position and tile layers, inventory, slide state, creature positions, and slip-queue entries. It freezes simulation while open and ignores board input; F8/Escape or controller Back closes it. The earlier inspector layout was visually reviewed at 1024x688, where the text fit and the timer stayed stable; the added death-cause label has been compiled but not visually reviewed. Tests were not run. The portable ZIP is refreshed from this build.
 
@@ -51,13 +53,13 @@ Board pickups and inventory use cleaned key/boot art indexed to original IDs `0x
 
 Creature overlays use a cleaned 6x6 sheet indexed to original IDs `0x40`–`0x63`; the imported original image/mask sheet remains available as fallback. The asset manifest records both cleaned-sheet hashes and original-art provenance.
 
-The game now uses the supplied original WAV effects and CHIP01/CHIP02 MIDI tracks. Windows plays the MIDI natively with the Windows Multimedia sequencer; SDL3 handles the WAV effects. macOS and Linux currently retain effects playback and need a native MIDI backend. Settings provide independent persisted mute and volume controls for effects and music.
+The game now uses the supplied original WAV effects and CHIP01/CHIP02 MIDI tracks. Windows plays MIDI with the Windows Multimedia sequencer, and macOS uses AudioToolbox's General MIDI software synthesizer; SDL3 handles WAV effects on both platforms. Linux currently has effects playback only and needs a native MIDI backend. Settings provide independent persisted mute and volume controls for effects and music.
 
 Switch, door, and socket audio now uses an explicit per-tick engine event, so clone and tank buttons sound like switches even when their status messages use different wording or are replaced by another action in the same tick.
 
 Pickup cues are driven by the successful tile action rather than inventory deltas, so a thief removing boots cannot play the boot-acquisition sound.
 
-The UI now uses an original crisp 5x7 bitmap typeface for menus, help, settings, and HUD labels. The glyphs are drawn as batched pixel runs and use no platform font or extra runtime dependency. [Preview the typeface](docs/art/ui-bitmap-font-preview.png).
+The UI uses bundled Noto Sans with antialiased rendering for menus, help, settings, dialogs, and result labels. The original pixel artwork and digital scoreboard remain unchanged.
 
 Settings now include mouse-clickable volume and display-scale sliders, a fullscreen/windowed toggle, and the reduced-motion option. Click the sound-effects row to toggle mute; F11 also toggles fullscreen. Keyboard shortcuts remain available, and the selected values persist in the user profile.
 
@@ -65,7 +67,7 @@ Pause and level-result overlays now present clickable Resume, Restart, Controls,
 
 The paged campaign selector now draws clickable previous/next buttons when a pack has more than 156 levels, so large custom packs can be browsed with a mouse as well as keyboard or gamepad.
 
-The title, settings, and campaign overlays use dark slate cards with teal borders and focus rows while retaining the original gameplay atlas and scoreboard. The title menu uses the supplied original game icon beside its subtitle, and the Windows executable embeds multi-resolution sizes of the same icon. Manual inspection at the default 1024x688 window confirmed that the title instruction and campaign selector heading fit.
+The title, settings, and campaign overlays use dark slate cards with teal borders and focus rows while retaining the original gameplay atlas and scoreboard. The title menu caption pairs the supplied game icon with the CHIP'S CHALLENGE title; the Windows executable embeds multi-resolution sizes of the same icon. Manual inspection at the default 1024x688 window confirmed that the title instruction and campaign selector heading fit.
 
 The gameplay status panel and top menu now use the same slate-and-teal visual language. The original gameplay atlas, digital counters, and cleaned key/boot sprites remain in use; inventory labels and HUD help/status text have more legible sizing and spacing. Manual inspection of the native 1024x688 window confirmed the inventory labels and three-line level message remain within the panel.
 

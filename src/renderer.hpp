@@ -6,6 +6,10 @@
 
 namespace chips_native {
 
+[[nodiscard]] inline SDL_FRect dialogExitButton(float panelLeft, float panelTop, float panelWidth) {
+    return {panelLeft + panelWidth - 40.0F, panelTop + 8.0F, 28.0F, 28.0F};
+}
+
 struct LevelGridLayout {
     float left{};
     float top{};
@@ -15,6 +19,7 @@ struct LevelGridLayout {
     float gridTop{};
     float cell{};
     SDL_FRect previewBounds{};
+    SDL_FRect exitButton{};
     SDL_FRect previousPageButton{};
     SDL_FRect nextPageButton{};
 };
@@ -38,12 +43,14 @@ struct BestTimesOverlayLayout {
     float top{};
     float width{};
     float height{};
+    SDL_FRect exitButton{};
     SDL_FRect previousPageButton{};
     SDL_FRect nextPageButton{};
 };
 
 struct ActionOverlayLayout {
     SDL_FRect card{};
+    SDL_FRect exitButton{};
     std::array<SDL_FRect, 3> buttons{};
     std::size_t buttonCount{};
 };
@@ -59,5 +66,7 @@ struct ActionOverlayLayout {
 [[nodiscard]] std::optional<int> boardPositionAtOutput(const App& app, float x, float y,
                                                        int outputWidth, int outputHeight);
 void draw(App& app);
+[[nodiscard]] bool initializeTextRendering(SDL_Renderer* renderer, const char* fontPath);
+void shutdownTextRendering();
 
 } // namespace chips_native

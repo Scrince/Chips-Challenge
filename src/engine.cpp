@@ -480,7 +480,51 @@ void GameState::advanceMouseTarget() {
     chipHasMoved = false;
 }
 
-void GameState::advanceTicks(unsigned ticks) {
+void GameState::advancePlayerCadence() {
+    playerAttemptedThisTick = false;
+    playerMovedThisTick = false;
+    playerTeleportedThisTick = false;
+    switchActivatedThisTick = false;
+    doorOpenedThisTick = false;
+    thiefActivatedThisTick = false;
+    splashThisTick = false;
+    playerPickupThisTick = PickupKind::none;
+    if (outcome != Outcome::playing) return;
+
+    if (sliding) {
+        (void)moveInternal(slideDirection, false);
+        if (pendingDirection && outcome == Outcome::playing) {
+            const auto requested = *pendingDirection;
+            pendingDirection.reset();
+            const auto surface = floor(playerPosition);
+            const bool forcedFloor = surface == 0x0D ||
+                (surface >= 0x12 && surface <= 0x14) || surface == 0x32;
+            const bool canSteerForcedFloor = sliding && forcedFloor &&
+                requested != slideDirection;
+            if (canSteerForcedFloor) {
+                const auto continuedDirection = slideDirection;
+                const auto continuedFacing = facing;
+                sliding = false;
+                const auto result = move(requested);
+                if (result == MoveResult::blocked && outcome == Outcome::playing) {
+                    sliding = true;
+                    slideDirection = continuedDirection;
+                    facing = continuedFacing;
+                }
+                playerAttemptedThisTick = true;
+            }
+        }
+    } else if (pendingDirection) {
+        const auto direction = *pendingDirection;
+        pendingDirection.reset();
+        playerAttemptedThisTick = true;
+        (void)move(direction);
+    } else if (mouseTargetPosition) {
+        advanceMouseTarget();
+    }
+}
+
+void GameState::advanceTicks(unsigned ticks, bool advancePlayerOnWorldTick) {
     for (unsigned i = 0; i < ticks && outcome == Outcome::playing; ++i) {
         playerAttemptedThisTick = false;
         playerMovedThisTick = false;
@@ -494,7 +538,7 @@ void GameState::advanceTicks(unsigned ticks) {
         gameTicks = (gameTicks + 1U) & 0xFFFFU; // Original CurrentTick is a wrapping 16-bit word.
         const bool oddTick = gameTicks % 2 != 0;
         bool tryMouseBeforeMonsters = false;
-        if (oddTick) {
+        if (advancePlayerOnWorldTick && oddTick) {
             // DoTick services buffered keyboard input on odd ticks when Chip
             // is not already sliding or marked as having moved this turn.
             if (!sliding && !chipHasMoved && pendingDirection) {
@@ -504,7 +548,7 @@ void GameState::advanceTicks(unsigned ticks) {
                 playerAttemptedThisTick = true;
                 (void)move(direction);
             }
-        } else if (!sliding) {
+        } else if (advancePlayerOnWorldTick && !sliding) {
             if (chipHasMoved) {
                 chipHasMoved = false;
             } else if (pendingDirection) {
@@ -541,9 +585,9 @@ void GameState::advanceTicks(unsigned ticks) {
                 }
             }
         }
-        const bool enteredChipSlidePhase = sliding;
+        const bool enteredChipSlidePhase = advancePlayerOnWorldTick && sliding;
         bool skipMouseMovementAfterSlide = false;
-        if (sliding) {
+        if (advancePlayerOnWorldTick && sliding) {
             if (outcome == Outcome::playing) (void)moveInternal(slideDirection, false);
             else if (outcome == Outcome::dead) (void)moveSlideAfterDeath(slideDirection);
             // DoTick tries one buffered move immediately after Chip's slide
@@ -578,6 +622,10 @@ void GameState::advanceTicks(unsigned ticks) {
                     playerAttemptedThisTick = true;
                 }
             }
+        } else if (!advancePlayerOnWorldTick && outcome == Outcome::dead && sliding) {
+            // Preserve DoTick's final post-collision slide when the world clock
+            // catches Chip during a forced move in faster-player mode.
+            (void)moveSlideAfterDeath(slideDirection);
         }
         if (enteredChipSlidePhase && !skipMouseMovementAfterSlide &&
             !pendingDirection && mouseTargetPosition &&

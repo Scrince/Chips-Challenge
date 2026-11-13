@@ -137,6 +137,17 @@ if ($Package) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\ART.md") -Destination $StagedAssetsRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\AUDIO.md") -Destination $StagedAssetsRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "README.md") -Destination $StagePath
+    $HelpSource = Join-Path $ProjectRoot "assets\help\chips-help.html"
+    if (-not (Test-Path -LiteralPath $HelpSource -PathType Leaf)) {
+        throw "Portable HTML help manual is missing: $HelpSource"
+    }
+    $HelpStageDirectory = Join-Path $StagedAssetsRoot "help"
+    New-Item -ItemType Directory -Path $HelpStageDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $HelpSource -Destination $HelpStageDirectory
+    $ChangelogSource = Join-Path $ProjectRoot "CHANGELOG.md"
+    if (Test-Path -LiteralPath $ChangelogSource -PathType Leaf) {
+        Copy-Item -LiteralPath $ChangelogSource -Destination $StagePath
+    }
     $AssetManifest = Join-Path $StagePath "assets\ASSET_MANIFEST.json"
     if (-not (Test-Path -LiteralPath $AssetManifest -PathType Leaf)) {
         throw "Original-art asset manifest is missing from the staged package: $AssetManifest"
@@ -186,6 +197,17 @@ The SDL3 runtime is included with this build. SDL is licensed under the zlib lic
 The license text is included below.
 
 "@ + (Get-Content -LiteralPath $SdlLicense -Raw)
+    $SdlTtfSourceRoot = Join-Path $BuildPath "_deps\sdl3_ttf-src"
+    $SdlTtfLicense = Join-Path $SdlTtfSourceRoot "LICENSE.txt"
+    $FreetypeLicense = Join-Path $SdlTtfSourceRoot "external\freetype\LICENSE.TXT"
+    if (-not (Test-Path -LiteralPath $SdlTtfLicense -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $FreetypeLicense -PathType Leaf)) {
+        throw "SDL3_ttf or FreeType license is missing; cannot create a complete font-enabled package."
+    }
+    $Notices += "`n`nSDL3_ttf`nThe SDL TrueType library is included with this build. Its license text follows.`n`n"
+    $Notices += Get-Content -LiteralPath $SdlTtfLicense -Raw
+    $Notices += "`n`nFreeType`nThe FreeType font engine is included through SDL3_ttf. Its license text follows.`n`n"
+    $Notices += Get-Content -LiteralPath $FreetypeLicense -Raw
     Set-Content -LiteralPath (Join-Path $StagePath "ThirdPartyNotices.txt") -Value $Notices -Encoding utf8
 
     $StagedExecutable = Join-Path $StagePath "chips-native.exe"
