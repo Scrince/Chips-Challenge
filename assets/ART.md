@@ -1,6 +1,6 @@
 # Original game artwork
 
-The runtime uses the user-supplied Windows game's original indexed-color art. `scripts/import_original_art.py` converts the original `OBJ32_4.bmp`, `200.bmp`, `BACKGROUND.bmp`, `CHIPEND.bmp`, and `chips.ico` into RGBA PNG/ICO assets. The original inputs remain read-only under `../CHIPS.EXE-master/CHIPS.EXE-master/`.
+The runtime uses the user-supplied Windows game's original indexed-color art. `scripts/import_original_art.py` converts the original `OBJ32_4.bmp`, `200.bmp`, `BACKGROUND.bmp`, `CHIPEND.bmp`, and `chips.ico` into RGBA PNG/ICO assets. The original inputs remain read-only under `../reference/CHIPS.EXE-master/CHIPS.EXE-master/`.
 
 Run `python scripts/import_original_art.py` from the project root to recreate the runtime files and `ASSET_MANIFEST.json`. The import uses Pillow, retains source colors and pixel shapes, and enlarges pixel art with nearest-neighbor sampling. Manifest hashes and source paths make the conversion reproducible.
 

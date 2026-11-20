@@ -22,8 +22,8 @@ struct MotionAnimation {
 
 inline constexpr std::size_t kBestTimesPerPage = 9;
 inline constexpr std::size_t kNoPasswordTarget = static_cast<std::size_t>(-1);
-inline constexpr int topMenuItemCount(int menu) {
-    return menu == 0 ? 4 : menu == 1 ? 4 : menu == 2 ? 6 : menu == 3 ? 5 : 0;
+inline constexpr int topMenuItemCount(int menu, bool customPackLoaded = false) {
+    return menu == 0 ? 4 : menu == 1 ? 4 : menu == 2 ? (customPackLoaded ? 7 : 6) : menu == 3 ? 5 : 0;
 }
 inline constexpr float kTopMenuBarHeight = 28.0F;
 inline constexpr float kTopMenuRowHeight = 23.0F;
@@ -70,6 +70,7 @@ struct App {
     Uint64 keyboardRepeatAt{};
     chips::AudioSystem audio;
     std::vector<chips::Level> levels;
+    bool customLevelPackLoaded{};
     std::size_t levelIndex{};
     chips::GameState game;
     chips::CampaignProfile profile;
@@ -113,6 +114,8 @@ struct App {
     bool levelSelect{};
     std::size_t selectedLevel{};
     bool fullscreen{};
+    bool browserFullscreenRequestPending{};
+    bool browserFullscreenRequestTarget{};
     bool displayProfileDirty{};
     Uint64 displayProfileSaveAt{};
     bool winRecorded{};

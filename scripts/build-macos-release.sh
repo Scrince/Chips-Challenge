@@ -2,15 +2,24 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUTPUT_DIR="${1:-${ROOT_DIR}/dist-macos}"
+OUTPUT_DIR="${1:-${ROOT_DIR}/build/macos}"
 OUTPUT_DIR="$(mkdir -p "${OUTPUT_DIR}" && cd "${OUTPUT_DIR}" && pwd)"
 VERSION="${VERSION:-$(sed -n 's/^project(ChipsChallengeNative VERSION \([^ ]*\).*/\1/p' "${ROOT_DIR}/CMakeLists.txt") }"
 VERSION="${VERSION// /}"
 SDL3_SOURCE_DIR="${SDL3_SOURCE_DIR:-}"
 if [[ -z "${SDL3_SOURCE_DIR}" ]]; then
-  for candidate in "${ROOT_DIR}"/build-*/_deps/sdl3-src; do
+  for candidate in "${ROOT_DIR}"/build/*/_deps/sdl3-src; do
     if [[ -f "${candidate}/CMakeLists.txt" ]]; then
       SDL3_SOURCE_DIR="${candidate}"
+      break
+    fi
+  done
+fi
+SDL3_TTF_SOURCE_DIR="${SDL3_TTF_SOURCE_DIR:-}"
+if [[ -z "${SDL3_TTF_SOURCE_DIR}" ]]; then
+  for candidate in "${ROOT_DIR}"/build/*/_deps/sdl3_ttf-src; do
+    if [[ -f "${candidate}/CMakeLists.txt" ]]; then
+      SDL3_TTF_SOURCE_DIR="${candidate}"
       break
     fi
   done
@@ -33,18 +42,33 @@ build_and_package() {
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_OSX_ARCHITECTURES="${archs}" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}" \
-    ${SDL3_SOURCE_DIR:+-DFETCHCONTENT_SOURCE_DIR_SDL3="${SDL3_SOURCE_DIR}"}
+    ${SDL3_SOURCE_DIR:+-DFETCHCONTENT_SOURCE_DIR_SDL3="${SDL3_SOURCE_DIR}"} \
+    ${SDL3_TTF_SOURCE_DIR:+-DFETCHCONTENT_SOURCE_DIR_SDL3_TTF="${SDL3_TTF_SOURCE_DIR}"}
   cmake --build "${build_dir}" --config Release --parallel
 
   rm -rf "${stage_dir}" "${app_dir}" "${zip_path}"
   cmake --install "${build_dir}" --config Release --prefix "${stage_dir}"
+  bash "${ROOT_DIR}/scripts/verify-audio-assets.sh" \
+    "${ROOT_DIR}/assets/audio" "${stage_dir}/assets/audio"
 
   mkdir -p "${app_dir}/Contents/MacOS" "${app_dir}/Contents/Resources"
   cp "${stage_dir}/chips-native" "${app_dir}/Contents/MacOS/chips-native"
   cp "${stage_dir}/libSDL3.0.dylib" "${app_dir}/Contents/MacOS/libSDL3.0.dylib"
+  cp -R "${stage_dir}"/libSDL3_ttf*.dylib "${app_dir}/Contents/MacOS/"
+  if [[ ! -e "${app_dir}/Contents/MacOS/libSDL3_ttf.0.dylib" ]]; then
+    ttf_library="$(find "${app_dir}/Contents/MacOS" -maxdepth 1 -type f -name 'libSDL3_ttf.*.dylib' | head -n 1)"
+    if [[ -z "${ttf_library}" ]]; then
+      echo "SDL3_ttf runtime library was not installed." >&2
+      exit 1
+    fi
+    ln -s "$(basename "${ttf_library}")" "${app_dir}/Contents/MacOS/libSDL3_ttf.0.dylib"
+  fi
   ln -s "libSDL3.0.dylib" "${app_dir}/Contents/MacOS/libSDL3.dylib"
   cp -R "${stage_dir}/assets" "${app_dir}/Contents/Resources/assets"
   cp -R "${stage_dir}/data" "${app_dir}/Contents/Resources/data"
+  bash "${ROOT_DIR}/scripts/verify-no-cclp2-assets.sh" "${app_dir}"
+  bash "${ROOT_DIR}/scripts/verify-audio-assets.sh" \
+    "${ROOT_DIR}/assets/audio" "${app_dir}/Contents/Resources/assets/audio"
   cat > "${app_dir}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

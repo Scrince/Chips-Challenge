@@ -4,8 +4,13 @@
 #include <array>
 #include <cwchar>
 #include <filesystem>
+#include <cstdlib>
 #include <string>
 #include <vector>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -14,6 +19,8 @@
 #elif defined(__APPLE__)
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+#include <fluidsynth.h>
 #endif
 
 namespace chips {
@@ -21,6 +28,21 @@ namespace {
 constexpr int kSampleRate = 22050;
 constexpr int kChannels = 2;
 constexpr std::size_t kCueCount = 12;
+
+#ifdef __EMSCRIPTEN__
+EM_JS(void, startBrowserMidi, (const char* path, float volume, int muted), {
+    if (window.chipsStartMidiMusic)
+        window.chipsStartMidiMusic(UTF8ToString(path), volume, muted !== 0);
+});
+
+EM_JS(void, stopBrowserMidi, (), {
+    if (window.chipsStopMidiMusic) window.chipsStopMidiMusic();
+});
+
+EM_JS(void, setBrowserMidiGain, (float volume, int muted), {
+    if (window.chipsSetMusicGain) window.chipsSetMusicGain(volume, muted !== 0);
+});
+#endif
 
 std::string pathToUtf8(const std::filesystem::path& path) {
     const auto encoded = path.u8string();
@@ -75,6 +97,28 @@ bool queryMciNumber(const std::wstring& command, Uint64& value) {
     if (end == response) return false;
     value = static_cast<Uint64>(parsed);
     return true;
+}
+#endif
+
+#if defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+std::filesystem::path findSoundFont() {
+    if (const char* configured = std::getenv("FLUIDSYNTH_SOUNDFONT");
+        configured && *configured) {
+        const std::filesystem::path path(configured);
+        if (std::filesystem::is_regular_file(path)) return path;
+        SDL_Log("FLUIDSYNTH_SOUNDFONT does not name a file: %s", configured);
+        return {};
+    }
+    constexpr std::array<const char*, 4> candidates{
+        "/usr/share/sounds/sf2/FluidR3_GM.sf2",
+        "/usr/share/sounds/sf2/default-GM.sf2",
+        "/usr/share/soundfonts/FluidR3_GM.sf2",
+        "/usr/share/soundfonts/default-GM.sf2",
+    };
+    for (const auto* candidate : candidates) {
+        if (std::filesystem::is_regular_file(candidate)) return candidate;
+    }
+    return {};
 }
 #endif
 }
@@ -276,6 +320,53 @@ void AudioSystem::startMusic(unsigned levelNumber) {
     midiOpen_ = true;
     SDL_Log("Loaded macOS background MIDI track %s", filename);
     updateMusicGain();
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+    stopMusic();
+    const auto filename = (levelNumber % 2 == 0) ? "CHIP02.MID" : "CHIP01.MID";
+    const auto audioFile = resourceRoot_ / "assets" / "audio" / filename;
+    if (!std::filesystem::is_regular_file(audioFile)) {
+        SDL_Log("Background MIDI file is missing: %s", pathToUtf8(audioFile).c_str());
+        return;
+    }
+    const auto soundFont = findSoundFont();
+    if (soundFont.empty()) {
+        SDL_Log("Linux MIDI playback needs a General MIDI soundfont; install fluid-soundfont-gm or set FLUIDSYNTH_SOUNDFONT");
+        return;
+    }
+
+    midiSettings_ = new_fluid_settings();
+    if (midiSettings_) {
+        fluid_settings_setnum(midiSettings_, "synth.sample-rate", kSampleRate);
+        fluid_settings_setnum(midiSettings_, "synth.gain", 0.2);
+        midiSynth_ = new_fluid_synth(midiSettings_);
+    }
+    if (midiSynth_) midiSoundFontId_ = fluid_synth_sfload(midiSynth_, pathToUtf8(soundFont).c_str(), 1);
+    if (midiSoundFontId_ >= 0) {
+        midiAudioDriver_ = new_fluid_audio_driver(midiSettings_, midiSynth_);
+        midiPlayer_ = new_fluid_player(midiSynth_);
+    }
+    if (!midiAudioDriver_ || !midiPlayer_ || fluid_player_add(midiPlayer_, pathToUtf8(audioFile).c_str()) != FLUID_OK) {
+        SDL_Log("Could not initialize Linux MIDI playback with FluidSynth");
+        stopMusic();
+        return;
+    }
+    fluid_player_set_loop(midiPlayer_, -1);
+    midiOpen_ = true;
+    SDL_Log("Loaded Linux background MIDI track %s with FluidSynth", filename);
+    updateMusicGain();
+#elif defined(__EMSCRIPTEN__)
+    stopMusic();
+    const auto filename = (levelNumber % 2 == 0) ? "CHIP02.MID" : "CHIP01.MID";
+    const auto audioFile = resourceRoot_ / "assets" / "audio" / filename;
+    if (!std::filesystem::is_regular_file(audioFile)) {
+        SDL_Log("Background MIDI file is missing: %s", pathToUtf8(audioFile).c_str());
+        return;
+    }
+    const auto path = pathToUtf8(audioFile);
+    startBrowserMidi(path.c_str(), musicVolume_, musicMuted_ ? 1 : 0);
+    midiOpen_ = true;
+    midiPlaying_ = !musicMuted_ && musicVolume_ > 0.0F;
+    SDL_Log("Loaded browser MIDI track %s with Web Audio", filename);
 #else
     (void)levelNumber;
 #endif
@@ -312,6 +403,34 @@ void AudioSystem::stopMusic() {
     }
     musicSynth_ = nullptr;
     midiTrackLengthBeats_ = 0.0;
+    midiOpen_ = false;
+    midiPlaying_ = false;
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+    if (midiPlayer_) {
+        fluid_player_stop(midiPlayer_);
+        delete_fluid_player(midiPlayer_);
+        midiPlayer_ = nullptr;
+    }
+    if (midiAudioDriver_) {
+        delete_fluid_audio_driver(midiAudioDriver_);
+        midiAudioDriver_ = nullptr;
+    }
+    if (midiSoundFontId_ >= 0 && midiSynth_) {
+        fluid_synth_sfunload(midiSynth_, midiSoundFontId_, 1);
+        midiSoundFontId_ = -1;
+    }
+    if (midiSynth_) {
+        delete_fluid_synth(midiSynth_);
+        midiSynth_ = nullptr;
+    }
+    if (midiSettings_) {
+        delete_fluid_settings(midiSettings_);
+        midiSettings_ = nullptr;
+    }
+    midiOpen_ = false;
+    midiPlaying_ = false;
+#elif defined(__EMSCRIPTEN__)
+    stopBrowserMidi();
     midiOpen_ = false;
     midiPlaying_ = false;
 #endif
@@ -364,6 +483,18 @@ void AudioSystem::update() {
             SDL_Log("Could not loop macOS background MIDI (AudioToolbox error %d)",
                     static_cast<int>(startStatus));
     }
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+    if (midiPlayer_ && midiOpen_) {
+        if (musicMuted_ || musicVolume_ <= 0.0F) {
+            if (midiPlaying_) fluid_player_stop(midiPlayer_);
+            midiPlaying_ = false;
+        } else if (!midiPlaying_) {
+            if (fluid_player_play(midiPlayer_) == FLUID_OK) midiPlaying_ = true;
+            else SDL_Log("Could not start Linux background MIDI playback");
+        }
+    }
+#elif defined(__EMSCRIPTEN__)
+    (void)0;
 #endif
 }
 
@@ -433,6 +564,14 @@ void AudioSystem::updateMusicGain() {
         MusicPlayerStop(musicPlayer_);
         midiPlaying_ = false;
     }
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+    if (midiSynth_ && midiOpen_) {
+        const float gain = musicMuted_ ? 0.0F : 0.2F * musicVolume_;
+        fluid_synth_set_gain(midiSynth_, gain);
+    }
+#elif defined(__EMSCRIPTEN__)
+    setBrowserMidiGain(musicVolume_, musicMuted_ ? 1 : 0);
+    midiPlaying_ = midiOpen_ && !musicMuted_ && musicVolume_ > 0.0F;
 #endif
 }
 }

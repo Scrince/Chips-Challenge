@@ -1,0 +1,10 @@
+[
+  {
+    "level": 13,
+    "title": "SOUTHPOLE",
+    "status": "solved",
+    "moves": 7,
+    "route": "ENNWENW",
+    "explored_states": 181
+  }
+]

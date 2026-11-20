@@ -1,0 +1,21 @@
+WebAssembly browser MIDI synthesizer dependencies
+
+spessasynth_lib 4.4.8
+Copyright (c) Spessasus
+Source: https://github.com/spessasus/spessasynth_lib
+License: Apache License 2.0 (see spessasynth_lib/LICENSE.txt)
+
+spessasynth_core 4.4.10
+Copyright (c) Spessasus
+Source: https://github.com/spessasus/spessasynth_core
+License: Apache License 2.0 (see spessasynth_core/LICENSE.txt)
+
+stb-vorbis 0.0.7
+Copyright (c) Spessasus
+Source: https://github.com/spessasus/stb-vorbis
+License: Apache License 2.0 (see stb-vorbis/LICENSE.txt)
+
+fflate 0.8.3
+Copyright (c) 2019 Aria and contributors
+Source: https://github.com/101arrowz/fflate
+License: MIT (see fflate/LICENSE.txt)

@@ -11,6 +11,11 @@
 
 #include <SDL3/SDL.h>
 
+#ifdef __EMSCRIPTEN__
+#include <SDL3/SDL_main.h>
+#include <emscripten.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -72,7 +77,7 @@ const std::array<std::uint16_t, 25> kReservedMovementScancodes{
     SDL_SCANCODE_F11, SDL_SCANCODE_P, SDL_SCANCODE_R, SDL_SCANCODE_L,
     SDL_SCANCODE_O, SDL_SCANCODE_M, SDL_SCANCODE_MINUS, SDL_SCANCODE_EQUALS,
     SDL_SCANCODE_LEFTBRACKET, SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_PAGEUP,
-    SDL_SCANCODE_PAGEDOWN, SDL_SCANCODE_UNKNOWN};
+    SDL_SCANCODE_PAGEDOWN, SDL_SCANCODE_GRAVE};
 
 int movementIndexForScancode(const App& app, SDL_Scancode scancode) {
     const auto key = static_cast<std::uint16_t>(scancode);
@@ -561,6 +566,12 @@ void openFirstGamepad(App& app) {
 }
 
 bool initialize(App& app) {
+#ifdef __EMSCRIPTEN__
+    // SDL defaults touch-to-mouse events off outside iOS. Enable them in the
+    // browser build so touch-only users can operate the same menus and board
+    // targets as mouse users.
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         SDL_Log("SDL initialization failed: %s", SDL_GetError());
         return false;
@@ -753,7 +764,14 @@ void loadCampaignProfile(App& app) {
     app.audio.setMuted(app.profile.effectsMuted);
     app.audio.setMusicVolume(static_cast<float>(app.profile.musicVolumePercent) / 100.0F);
     app.audio.setMusicMuted(app.profile.musicMuted);
+#ifdef __EMSCRIPTEN__
+    // Browsers only honor fullscreen requests made directly from a user
+    // gesture. Do not replay a saved fullscreen preference during startup.
+    const bool requestedFullscreen = false;
+    app.profile.fullscreen = false;
+#else
     const bool requestedFullscreen = app.profile.fullscreen;
+#endif
     if (!SDL_SetWindowFullscreen(app.window, requestedFullscreen)) {
         SDL_Log("Unable to restore saved display mode: %s", SDL_GetError());
         app.fullscreen = (SDL_GetWindowFlags(app.window) & SDL_WINDOW_FULLSCREEN) != 0;
@@ -789,10 +807,13 @@ std::string customPackProfileFileName(const std::filesystem::path& packPath) {
     return name.str();
 }
 
-void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath) {
+void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath,
+                          std::string profileName = {}) {
     auto levels = chips::loadLevelPack(packPath);
     if (levels.empty()) throw chips::LevelPackError("Level pack contains no levels");
-    auto profileFileName = customPackProfileFileName(packPath);
+    if (profileName.empty()) profileName = customPackProfileFileName(packPath);
+    if (!app.profilePath.empty())
+        (void)chips::recordLevelSelection(app.profile, app.levelIndex, app.levels.size());
     if (!app.profilePath.empty()) {
         chips::saveProfile(app.profilePath, app.profile);
         app.displayProfileDirty = false;
@@ -800,7 +821,8 @@ void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath) {
     const auto tickPhase = app.game.gameTicks;
     const auto randomPhase = app.game.randomState;
     app.levels = std::move(levels);
-    app.profileFileName = std::move(profileFileName);
+    app.customLevelPackLoaded = true;
+    app.profileFileName = std::move(profileName);
     app.profilePath.clear();
     app.profileMessage.clear();
     app.profile = {};
@@ -828,42 +850,227 @@ void loadLevelPackIntoApp(App& app, const std::filesystem::path& packPath) {
     app.lastPlayerTick = app.lastTick;
 }
 
-void SDLCALL levelPackDialogCallback(void* userdata, const char* const* filelist, int) {
-    auto* app = static_cast<App*>(userdata);
-    constexpr Sint32 selectedFile = 0;
-    constexpr Sint32 dialogError = 1;
-    constexpr Sint32 dialogCancelled = 2;
-    char* result = nullptr;
-    Sint32 resultCode = dialogCancelled;
-    if (!filelist) {
-        resultCode = dialogError;
-        result = SDL_strdup(SDL_GetError());
-    } else if (filelist[0]) {
-        resultCode = selectedFile;
-        result = SDL_strdup(filelist[0]);
-    }
+void queueLevelPackDialogResult(App& app, Sint32 resultCode, const char* result) {
+    char* eventResult = result ? SDL_strdup(result) : nullptr;
     SDL_Event event{};
-    event.type = app->levelPackDialogEventType;
+    event.type = app.levelPackDialogEventType;
     event.user.code = resultCode;
-    event.user.data1 = result;
+    event.user.data1 = eventResult;
     if (!SDL_PushEvent(&event)) {
-        SDL_free(result);
-        app->levelPackDialogEventPushFailed.store(true, std::memory_order_release);
+        SDL_free(eventResult);
+        app.levelPackDialogEventPushFailed.store(true, std::memory_order_release);
     }
 }
 
+void SDLCALL levelPackDialogCallback(void* userdata, const char* const* filelist, int) {
+    auto* app = static_cast<App*>(userdata);
+    if (!filelist) queueLevelPackDialogResult(*app, 1, SDL_GetError());
+    else if (filelist[0]) queueLevelPackDialogResult(*app, 0, filelist[0]);
+    else queueLevelPackDialogResult(*app, 2, nullptr);
+}
+
+#ifdef __EMSCRIPTEN__
+EM_JS(void, showWebLevelPackPicker, (uintptr_t appAddress), {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.dat,.DAT,application/octet-stream';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    let completed = false;
+    const finish = (resultCode, result) => {
+        if (completed) return;
+        completed = true;
+        window.removeEventListener('focus', onWindowFocus);
+        input.remove();
+        const resultPointer = result ? stringToNewUTF8(result) : 0;
+        Module._chipsWebLevelPackDialogResult(appAddress, resultPointer, resultCode);
+    };
+    const onWindowFocus = () => {
+        // Older browsers do not dispatch the input element's `cancel` event.
+        // Returning focus without a selected file is a safe cancellation.
+        setTimeout(() => {
+            if (!completed && (!input.files || input.files.length === 0)) finish(2, null);
+        }, 500);
+    };
+    window.addEventListener('focus', onWindowFocus, { once: true });
+    input.addEventListener('cancel', () => finish(2, null), { once: true });
+    input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        if (!file) {
+            finish(2, null);
+            return;
+        }
+        let path = null;
+        try {
+            const safeName = file.name.replace(/[^a-z0-9_.-]/gi, '_') || 'custom.dat';
+            path = '/tmp/chips-pack-' + Date.now() + '-' + safeName;
+            let fileBytes;
+            if (typeof file.arrayBuffer === 'function') {
+                fileBytes = await file.arrayBuffer();
+            } else {
+                fileBytes = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error || new Error('File read failed'));
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+            FS.writeFile(path, new Uint8Array(fileBytes));
+            finish(0, path);
+        } catch (error) {
+            if (path && FS.analyzePath(path).exists) FS.unlink(path);
+            finish(1, 'Could not read the selected level pack: ' + error);
+        }
+    }, { once: true });
+    try {
+        input.click();
+    } catch (error) {
+        finish(1, 'Could not open the browser file picker: ' + error);
+    }
+});
+
+EM_JS(int, requestBrowserFullscreenFromGesture, (uintptr_t appAddress, int entering), {
+    const canvas = document.getElementById('canvas');
+    let result;
+    try {
+        if (entering) {
+            const request = canvas && (canvas.requestFullscreen || canvas.webkitRequestFullscreen || canvas.webkitRequestFullScreen);
+            if (!request) return 0;
+            result = request.call(canvas);
+        } else {
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!isFullscreen) return 1;
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (!exit) return 0;
+            result = exit.call(document);
+        }
+        if (result && typeof result.catch === 'function')
+            result.catch(() => Module._chipsBrowserFullscreenRequestFailed(appAddress, entering));
+        return 1;
+    } catch (error) {
+        console.warn('Could not change browser fullscreen mode:', error);
+        return 0;
+    }
+});
+#endif
+
 void requestLevelPackOpen(App& app) {
     if (app.levelPackDialogPending) return;
+#ifndef __EMSCRIPTEN__
     static constexpr std::array<SDL_DialogFileFilter, 2> filters{{
         {"Chip's Challenge level packs", "dat;DAT"},
         {"All files", "*"}
     }};
+#endif
     app.levelPackDialogPending = true;
     app.exitAfterFileDialog = false;
     app.lastTick = SDL_GetTicks();
     app.lastPlayerTick = app.lastTick;
+#ifdef __EMSCRIPTEN__
+    showWebLevelPackPicker(reinterpret_cast<std::uintptr_t>(&app));
+#else
     SDL_ShowOpenFileDialog(levelPackDialogCallback, &app, app.window,
                            filters.data(), static_cast<int>(filters.size()), nullptr, false);
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+bool SDLCALL openLevelPackFromBrowserGesture(void* userdata, SDL_Event* event) {
+    auto* app = static_cast<App*>(userdata);
+    if (!app) return true;
+
+    bool fullscreenGesture = event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat &&
+                             event->key.key == SDLK_F11;
+    if (!fullscreenGesture && app->settingsVisible && app->waitingForBinding < 0 &&
+        event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+        event->button.button == SDL_BUTTON_LEFT) {
+        int physicalWidth = 0, physicalHeight = 0, windowWidth = 0, windowHeight = 0;
+        if (SDL_GetCurrentRenderOutputSize(app->renderer, &physicalWidth, &physicalHeight) &&
+            SDL_GetWindowSize(app->window, &windowWidth, &windowHeight) &&
+            windowWidth > 0 && windowHeight > 0) {
+            const float scale = uiScaleForOutput(physicalWidth, physicalHeight,
+                                                 app->profile.uiScalePercent);
+            const float x = event->button.x * static_cast<float>(physicalWidth) /
+                            static_cast<float>(windowWidth) / scale;
+            const float y = event->button.y * static_cast<float>(physicalHeight) /
+                            static_cast<float>(windowHeight) / scale;
+            const int outputWidth = std::max(1, static_cast<int>(physicalWidth / scale));
+            const int outputHeight = std::max(1, static_cast<int>(physicalHeight / scale));
+            const auto layout = settingsOverlayLayout(outputWidth, outputHeight);
+            fullscreenGesture = x >= layout.fullscreenToggle.x &&
+                x < layout.fullscreenToggle.x + layout.fullscreenToggle.w &&
+                y >= layout.fullscreenToggle.y &&
+                y < layout.fullscreenToggle.y + layout.fullscreenToggle.h;
+        }
+    }
+    if (fullscreenGesture && !app->browserFullscreenRequestPending) {
+        const bool target = !app->fullscreen;
+        if (requestBrowserFullscreenFromGesture(reinterpret_cast<std::uintptr_t>(app), target ? 1 : 0)) {
+            app->browserFullscreenRequestPending = true;
+            app->browserFullscreenRequestTarget = target;
+        }
+    }
+
+    if (app->levelPackDialogPending || app->topMenuOpen != 2) return true;
+
+    bool openPicker = false;
+    if ((event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+         event->button.button == SDL_BUTTON_LEFT) ||
+        event->type == SDL_EVENT_FINGER_DOWN) {
+        int outputWidth = 0, outputHeight = 0, windowWidth = 0, windowHeight = 0;
+        if (SDL_GetCurrentRenderOutputSize(app->renderer, &outputWidth, &outputHeight) &&
+            SDL_GetWindowSize(app->window, &windowWidth, &windowHeight) &&
+            windowWidth > 0 && windowHeight > 0) {
+            const float scale = uiScaleForOutput(outputWidth, outputHeight,
+                                                 app->profile.uiScalePercent);
+            const bool fingerEvent = event->type == SDL_EVENT_FINGER_DOWN;
+            const float x = fingerEvent
+                ? event->tfinger.x * static_cast<float>(outputWidth) / scale
+                : event->button.x * static_cast<float>(outputWidth) /
+                      static_cast<float>(windowWidth) / scale;
+            const float y = fingerEvent
+                ? event->tfinger.y * static_cast<float>(outputHeight) / scale
+                : event->button.y * static_cast<float>(outputHeight) /
+                      static_cast<float>(windowHeight) / scale;
+            constexpr float itemLeft = 162.0F;
+            constexpr float itemWidth = 220.0F;
+            constexpr float openPackTop = kTopMenuDropTop + 4.0F * kTopMenuRowHeight;
+            const float openPackBottom = openPackTop + kTopMenuRowHeight;
+            openPicker = x >= itemLeft && x < itemLeft + itemWidth &&
+                         y >= openPackTop && y < openPackBottom;
+        }
+    } else if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat &&
+               (event->key.key == SDLK_RETURN || event->key.key == SDLK_SPACE)) {
+        openPicker = app->topMenuSelection == 4;
+    }
+    if (!openPicker) return true;
+
+    // SDL processes queued input on the next animation frame. Start the file
+    // input now, inside the trusted browser event, or Safari may reject it.
+    app->levelPackDialogPending = true;
+    app->exitAfterFileDialog = false;
+    app->topMenuOpen = -1;
+    app->topMenuSelection = -1;
+    app->lastTick = SDL_GetTicks();
+    app->lastPlayerTick = app->lastTick;
+    showWebLevelPackPicker(reinterpret_cast<std::uintptr_t>(app));
+    return true;
+}
+#endif
+
+void returnToMainCampaign(App& app) {
+    if (!app.customLevelPackLoaded) return;
+    const auto* basePath = SDL_GetBasePath();
+    const auto dataDirectory = pathFromUtf8(basePath ? basePath : "") / "data";
+    const auto targetPack = dataDirectory / "CHIPS.DAT";
+    try {
+        loadLevelPackIntoApp(app, targetPack, "campaign.ccprofile");
+        app.customLevelPackLoaded = false;
+    } catch (const std::exception& error) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Level pack unavailable",
+            error.what(), app.window);
+    }
 }
 
 void persistProfile(App& app, bool announce) {
@@ -878,6 +1085,14 @@ void persistProfile(App& app, bool announce) {
 }
 
 void toggleFullscreen(App& app) {
+#ifdef __EMSCRIPTEN__
+    if (app.browserFullscreenRequestPending) {
+        app.fullscreen = app.browserFullscreenRequestTarget;
+        app.profile.fullscreen = app.fullscreen;
+        persistProfile(app);
+        return;
+    }
+#endif
     const bool requestedFullscreen = !app.fullscreen;
     if (!SDL_SetWindowFullscreen(app.window, requestedFullscreen)) {
         SDL_Log("Unable to change fullscreen mode: %s", SDL_GetError());
@@ -1253,7 +1468,8 @@ bool handleDialogExitClick(App& app, float windowX, float windowY) {
 }
 
 void activateTopMenuItem(App& app, int menu, int row) {
-    if (menu < 0 || menu > 3 || row < 0 || row >= topMenuItemCount(menu)) return;
+    if (menu < 0 || menu > 3 || row < 0 ||
+        row >= topMenuItemCount(menu, app.customLevelPackLoaded)) return;
     // The Color entry mirrors the original menu's checked, always-color mode.
     // This renderer has no monochrome mode, so leave the menu open and unchanged.
     if (menu == 1 && row == 2) return;
@@ -1308,7 +1524,9 @@ void activateTopMenuItem(App& app, int menu, int row) {
             openGoToDialog(app);
         } else if (row == 4) {
             requestLevelPackOpen(app);
-        } else if (row == 5) {
+        } else if (app.customLevelPackLoaded && row == 5) {
+            returnToMainCampaign(app);
+        } else if (row == (app.customLevelPackLoaded ? 6 : 5)) {
             app.levelSelect = true;
             app.selectedLevel = app.levelIndex;
         }
@@ -1496,8 +1714,7 @@ void handleGamepadButton(App& app, SDL_GamepadButton button) {
         togglePause(app);
 }
 
-void run(App& app) {
-    while (app.running) {
+void runFrame(App& app) {
         SDL_Event event{};
         while (SDL_PollEvent(&event)) {
             if (event.type == app.levelPackDialogEventType) {
@@ -1516,6 +1733,12 @@ void run(App& app) {
                         (result ? result : "unknown error");
                     SDL_Log("Level-pack file dialog failed: %s", result ? result : "unknown error");
                 }
+#ifdef __EMSCRIPTEN__
+            if (resultCode == 0 && result) {
+                std::error_code ignored;
+                std::filesystem::remove(pathFromUtf8(result), ignored);
+            }
+#endif
                 SDL_free(result);
                 app.lastTick = SDL_GetTicks();
                 app.lastPlayerTick = app.lastTick;
@@ -1540,6 +1763,15 @@ void run(App& app) {
                     app.displayProfileDirty = true;
                     app.displayProfileSaveAt = SDL_GetTicks() + 500;
                 }
+            } else if (event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN ||
+                       event.type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN) {
+                const bool fullscreen = event.type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN;
+                app.fullscreen = fullscreen;
+                app.profile.fullscreen = fullscreen;
+                if (app.browserFullscreenRequestPending &&
+                    app.browserFullscreenRequestTarget == fullscreen)
+                    app.browserFullscreenRequestPending = false;
+                persistProfile(app);
             } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST ||
                        event.type == SDL_EVENT_WINDOW_MINIMIZED) {
                 // Do not let alt-tab or another native window consume board
@@ -1631,7 +1863,7 @@ void run(App& app) {
                     }
                 }
                 if (app.topMenuOpen >= 0) {
-                    const int itemCount = topMenuItemCount(app.topMenuOpen);
+                    const int itemCount = topMenuItemCount(app.topMenuOpen, app.customLevelPackLoaded);
                     const auto focusKeyboardMenu = [&app]() {
                         float mouseX = 0.0F;
                         float mouseY = 0.0F;
@@ -1887,6 +2119,15 @@ void run(App& app) {
                     case SDLK_F11:
                         toggleFullscreen(app);
                         break;
+                    case SDLK_F10: case SDLK_GRAVE:
+                        if (!app.mainMenuVisible && !app.levelSelect && !app.helpVisible &&
+                            !app.settingsVisible && !app.passwordVisible &&
+                            !app.goToDialogVisible) {
+                            app.topMenuOpen = app.topMenuOpen < 0 ? 0 : -1;
+                            app.topMenuSelection = -1;
+                            app.topMenuKeyboardFocus = true;
+                        }
+                        break;
                     case SDLK_M:
                         if (!event.key.repeat) {
                             app.profile.effectsMuted = !app.profile.effectsMuted;
@@ -1978,7 +2219,7 @@ void run(App& app) {
                         static constexpr std::array<float, 4> menuLeft{0.0F, 70.0F, 162.0F, 246.0F};
                         static constexpr std::array<float, 4> menuWidth{194.0F, 220.0F, 220.0F, 280.0F};
                         const auto menuIndex = static_cast<std::size_t>(app.topMenuOpen);
-                        const std::size_t itemCount = static_cast<std::size_t>(topMenuItemCount(app.topMenuOpen));
+                        const std::size_t itemCount = static_cast<std::size_t>(topMenuItemCount(app.topMenuOpen, app.customLevelPackLoaded));
                         if (y >= kTopMenuDropTop && y < kTopMenuDropTop + static_cast<float>(itemCount) * kTopMenuRowHeight &&
                             x >= menuLeft[menuIndex] && x < menuLeft[menuIndex] + menuWidth[menuIndex])
                             app.topMenuSelection = static_cast<int>((y - kTopMenuDropTop) / kTopMenuRowHeight);
@@ -2028,7 +2269,7 @@ void run(App& app) {
                     static constexpr std::array<float, 4> menuLeft{0.0F, 70.0F, 162.0F, 246.0F};
                     static constexpr std::array<float, 4> menuWidth{194.0F, 220.0F, 220.0F, 280.0F};
                     const float openMenuBottom = app.topMenuOpen >= 0
-                        ? kTopMenuDropTop + static_cast<float>(topMenuItemCount(app.topMenuOpen)) * kTopMenuRowHeight
+                        ? kTopMenuDropTop + static_cast<float>(topMenuItemCount(app.topMenuOpen, app.customLevelPackLoaded)) * kTopMenuRowHeight
                         : kTopMenuDropTop;
                     if (app.topMenuOpen >= 0 && y >= kTopMenuDropTop && y < openMenuBottom &&
                         x >= menuLeft[static_cast<std::size_t>(app.topMenuOpen)] &&
@@ -2249,14 +2490,54 @@ void run(App& app) {
             app.lastTick += kSimulationTickMs;
         }
         if (gameplayActive) advancePlayerClockUntil(app, now);
-        recordLevelWin(app);
-        draw(app);
-    }
+    recordLevelWin(app);
+    draw(app);
     if (app.displayProfileDirty) {
         persistProfile(app, false);
         app.displayProfileDirty = false;
     }
 }
+
+#ifndef __EMSCRIPTEN__
+void run(App& app) {
+    while (app.running) runFrame(app);
+}
+#endif
+
+void finishApp(App& app) {
+#ifdef __EMSCRIPTEN__
+    SDL_RemoveEventWatch(openLevelPackFromBrowserGesture, &app);
+#endif
+    if (app.gamepad) SDL_CloseGamepad(app.gamepad);
+    app.audio.shutdown();
+    chips_native::shutdownTextRendering();
+    SDL_DestroyTexture(app.originalTransparentSprites);
+    SDL_DestroyTexture(app.polishedPlayerLandPoses);
+    SDL_DestroyTexture(app.polishedPlayerSwimPoses);
+    SDL_DestroyTexture(app.cleanedCreatureSprites);
+    SDL_DestroyTexture(app.cleanedKeyBootIcons);
+    SDL_DestroyTexture(app.gameBackground);
+    SDL_DestroyTexture(app.menuBackground);
+    SDL_DestroyTexture(app.victoryIllustration);
+    SDL_DestroyTexture(app.appIcon);
+    SDL_DestroyTexture(app.digitalDigits);
+    SDL_DestroyTexture(app.scoreboardPanel);
+    SDL_DestroyTexture(app.atlas);
+    SDL_DestroyRenderer(app.renderer);
+    SDL_DestroyWindow(app.window);
+    SDL_Quit();
+}
+
+#ifdef __EMSCRIPTEN__
+void browserFrame(void* context) {
+    auto& app = *static_cast<App*>(context);
+    runFrame(app);
+    if (!app.running) {
+        finishApp(app);
+        emscripten_cancel_main_loop();
+    }
+}
+#endif
 
 int validatePack(const std::filesystem::path& path) {
     try {
@@ -2437,6 +2718,30 @@ int validateDigits(const std::filesystem::path& path) {
 }
 }
 
+#ifdef __EMSCRIPTEN__
+extern "C" EMSCRIPTEN_KEEPALIVE
+void chipsWebLevelPackDialogResult(std::uintptr_t appAddress, const char* result,
+                                   int resultCode) {
+    auto* app = reinterpret_cast<App*>(appAddress);
+    if (app) queueLevelPackDialogResult(*app, static_cast<Sint32>(resultCode), result);
+    SDL_free(const_cast<char*>(result));
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE
+void chipsBrowserFullscreenRequestFailed(std::uintptr_t appAddress, int entering) {
+    auto* app = reinterpret_cast<App*>(appAddress);
+    const bool requested = entering != 0;
+    if (!app || !app->browserFullscreenRequestPending ||
+        app->browserFullscreenRequestTarget != requested)
+        return;
+    app->browserFullscreenRequestPending = false;
+    app->fullscreen = !requested;
+    app->profile.fullscreen = app->fullscreen;
+    app->profileMessage = "The browser denied the fullscreen request.";
+    persistProfile(*app);
+}
+#endif
+
 int main(int argc, char** argv) {
     auto nativeArguments = chips::platform::Utf8Arguments::fromNative(argc, argv);
     if (!nativeArguments) {
@@ -2511,8 +2816,13 @@ int main(int argc, char** argv) {
                     "Usage: chips-native [CHIPS.DAT] [--debug-start <level> <x> <y>]");
             }
         }
+#ifdef __EMSCRIPTEN__
+        static App app;
+#else
         App app;
+#endif
         if (customPackPath) app.profileFileName = customPackProfileFileName(packPath);
+        app.customLevelPackLoaded = customPackPath;
         app.levels = chips::loadLevelPack(packPath);
         if (app.levels.empty()) throw chips::LevelPackError("Level pack contains no levels");
         if (debugStart) {
@@ -2531,6 +2841,10 @@ int main(int argc, char** argv) {
         // matching Windows clock and a monotonic equivalent elsewhere.
         resetPlayer(app);
         loadCampaignProfile(app);
+#ifdef __EMSCRIPTEN__
+        if (!SDL_AddEventWatch(openLevelPackFromBrowserGesture, &app))
+            SDL_Log("Could not register the browser file-picker gesture handler: %s", SDL_GetError());
+#endif
         if (debugStart) {
             app.game.playerPosition = (*debugStart)[2] * chips::kBoardWidth + (*debugStart)[1];
             app.levelPlacardVisible = false;
@@ -2539,26 +2853,16 @@ int main(int argc, char** argv) {
             app.lastTick = SDL_GetTicks();
             app.lastPlayerTick = app.lastTick;
         }
-        run(app);
-        if (app.gamepad) SDL_CloseGamepad(app.gamepad);
-        app.audio.shutdown();
-        chips_native::shutdownTextRendering();
-        SDL_DestroyTexture(app.originalTransparentSprites);
-        SDL_DestroyTexture(app.polishedPlayerLandPoses);
-        SDL_DestroyTexture(app.polishedPlayerSwimPoses);
-        SDL_DestroyTexture(app.cleanedCreatureSprites);
-        SDL_DestroyTexture(app.cleanedKeyBootIcons);
-        SDL_DestroyTexture(app.gameBackground);
-        SDL_DestroyTexture(app.menuBackground);
-        SDL_DestroyTexture(app.victoryIllustration);
-        SDL_DestroyTexture(app.appIcon);
-        SDL_DestroyTexture(app.digitalDigits);
-        SDL_DestroyTexture(app.scoreboardPanel);
-        SDL_DestroyTexture(app.atlas);
-        SDL_DestroyRenderer(app.renderer);
-        SDL_DestroyWindow(app.window);
-        SDL_Quit();
+#ifdef __EMSCRIPTEN__
+        // A browser main loop must yield to the event loop every frame. The
+        // browser's first user click also unlocks SDL's WebAudio context.
+        emscripten_set_main_loop_arg(browserFrame, &app, 0, 1);
         return 0;
+#else
+        run(app);
+        finishApp(app);
+        return 0;
+#endif
     } catch (const std::exception& error) {
         std::cerr << "Unable to start game: " << error.what() << '\n';
         return 1;

@@ -1,0 +1,8 @@
+[
+  {
+    "level": 19,
+    "title": "DIGGER",
+    "status": "state_limit",
+    "reason": "search reached the 50,000 state limit"
+  }
+]

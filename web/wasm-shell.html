@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <link rel="icon" href="favicon.ico">
+  <title>Chip's Challenge</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101820; color: #f5f1df; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; height: 100dvh; margin: 0; overflow: hidden; }
+    body { display: grid; place-items: center; }
+    #game { width: min(100vw, 1280px); height: min(100vh, 820px); height: min(100dvh, 820px); min-width: 0; min-height: 0; }
+    #canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: manipulation; }
+    #hint { position: fixed; inset: auto 0 1rem; text-align: center; color: #dce5e7; font-size: .9rem; pointer-events: none; text-shadow: 0 1px 4px #000; }
+    #status { position: fixed; inset: 0; display: grid; place-items: center; background: #101820; color: #f5f1df; }
+    #status.hidden { display: none; }
+    #help-dialog { width: min(96vw, 1120px); height: min(92vh, 860px); height: min(92dvh, 860px); max-width: none; max-height: none; padding: 0; border: 1px solid #78909a; border-radius: 8px; overflow: hidden; background: #f5f8f9; box-shadow: 0 16px 64px #000a; }
+    #help-dialog[open] { display: flex; flex-direction: column; }
+    #help-dialog::backdrop { background: #000a; }
+    #help-toolbar { height: 44px; flex: 0 0 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; background: #183743; color: #fff; font: 600 15px system-ui, sans-serif; }
+    #help-close { border: 1px solid #b8cdd3; border-radius: 5px; padding: 5px 12px; background: #fff; color: #183743; font: inherit; cursor: pointer; }
+    #help-frame { width: 100%; flex: 1; border: 0; background: #f5f8f9; }
+  </style>
+</head>
+<body>
+  <main id="game"><canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="0" aria-label="Chip's Challenge game"></canvas></main>
+  <div id="status">Loading Chip's Challenge…</div>
+  <div id="hint">Click the game to enable sound. Move with arrow keys or WASD, or tap a tile. Press ` for menus or Escape to pause.</div>
+  <dialog id="help-dialog" aria-label="Chip's Challenge help">
+    <div id="help-toolbar"><span>Chip's Challenge Help</span><button id="help-close" type="button">Close</button></div>
+    <iframe id="help-frame" title="Chip's Challenge help manual"></iframe>
+  </dialog>
+  <script>
+    (() => {
+      const anchors = new Set(["TOPIC16", "TOPIC22", "TOPIC23", "HOWTOHELP", "TOPIC28"]);
+      const dialog = document.getElementById("help-dialog");
+      const frame = document.getElementById("help-frame");
+      document.getElementById("help-close").addEventListener("click", () => dialog.close());
+      dialog.addEventListener("close", () => document.getElementById("canvas").focus());
+      window.chipsShowHelp = (anchor) => {
+        const selected = anchors.has(anchor) ? anchor : "TOPIC16";
+        const helpUrl = new URL("chips-help.html", document.baseURI);
+        helpUrl.hash = selected;
+        frame.src = helpUrl.href;
+        if (!dialog.open) dialog.showModal();
+      };
+
+      // SDL_OpenURL uses window.open in Emscripten. Translate its virtual-FS
+      // file URL into the packaged static manual displayed in this dialog.
+      const openExternalUrl = window.open.bind(window);
+      window.open = (url, target, features) => {
+        try {
+          const parsed = new URL(url, document.baseURI);
+          if (parsed.protocol === "file:" &&
+              parsed.pathname.endsWith("/assets/help/chips-help.html")) {
+            window.chipsShowHelp(parsed.hash.slice(1));
+            return null;
+          }
+        } catch (_) {}
+        return openExternalUrl(url, target, features);
+      };
+    })();
+  </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "spessasynth_lib": "./vendor/spessasynth_lib/index.js",
+        "spessasynth_core": "./vendor/spessasynth_core/index.js",
+        "fflate": "./vendor/fflate/browser.js",
+        "stb-vorbis": "./vendor/stb-vorbis/index.js"
+      }
+    }
+  </script>
+  <script src="midi-player.js"></script>
+  <script>
+    var statusElement = document.getElementById('status');
+    var gameCanvas = document.getElementById('canvas');
+    gameCanvas.addEventListener('pointerdown', () => window.chipsUnlockMusicAudio());
+    gameCanvas.addEventListener('keydown', () => window.chipsUnlockMusicAudio());
+    var Module = {
+      canvas: gameCanvas,
+      print: (text) => console.log(text),
+      printErr: (text) => console.warn(text),
+      setStatus: (text) => {
+        if (text) {
+          statusElement.textContent = text;
+          statusElement.classList.remove('hidden');
+        } else {
+          statusElement.classList.add('hidden');
+        }
+      },
+      onRuntimeInitialized: () => {
+        statusElement.classList.add('hidden');
+        // SDL's Emscripten pointer setup disables browser gestures. Restore
+        // manipulation after SDL initialization so users can still pinch-zoom.
+        requestAnimationFrame(() => { gameCanvas.style.touchAction = 'manipulation'; });
+      },
+      onAbort: (reason) => {
+        statusElement.textContent = 'The game could not start: ' + reason;
+        statusElement.classList.remove('hidden');
+      }
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

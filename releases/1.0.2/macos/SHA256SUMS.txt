@@ -1,0 +1,3 @@
+b69b66bcbbbdc43929748db53ee4d88c18ec9af8b13d4325560e6290d7c8a511  Chips-Challenge-1.0.2-macOS-arm64.zip
+997f7fde49799a64d7ee7c3f27f94412e15dc7b681c5f559fa91e0d433524fd4  Chips-Challenge-1.0.2-macOS-universal.zip
+9d36fe7b33eff28a4ced7cf9db30fda3a8bc9dfaaed2448673f8c5c7f701f1ef  Chips-Challenge-1.0.2-macOS-x86_64.zip

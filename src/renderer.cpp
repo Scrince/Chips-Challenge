@@ -1766,10 +1766,10 @@ void draw(App& app) {
         SDL_SetRenderDrawBlendMode(app.renderer, SDL_BLENDMODE_NONE);
     }
     if (app.topMenuOpen >= 0) {
-        static constexpr std::array<std::array<const char*, 7>, 4> items{{
+        std::array<std::array<const char*, 7>, 4> items{{
             {{"New Game", "Pause", "Best Times...", "Exit", "", ""}},
             {{"Background Music", "Sound Effects", "Color", "More Options...", "", ""}},
-            {{"Restart", "Next", "Previous", "Go To...", "Open Level Pack...", "Choose Level...", ""}},
+            {{"Restart", "Next", "Previous", "Go To...", "Open Level Pack...", "Chip's Challenge", "Choose Level..."}},
             {{"Contents", "How to Play", "Commands", "How to Use Help", "About Chip's Challenge...", "", ""}}}};
         static constexpr std::array<std::array<const char*, 7>, 4> shortcuts{{
             {{"F2", "F3", "", "", "", "", ""}},
@@ -1779,7 +1779,11 @@ void draw(App& app) {
         static constexpr std::array<float, 4> left{0.0F, 70.0F, 162.0F, 246.0F};
         static constexpr std::array<float, 4> widths{194.0F, 220.0F, 220.0F, 280.0F};
         const int menu = app.topMenuOpen;
-        const std::size_t count = static_cast<std::size_t>(topMenuItemCount(menu));
+        if (menu == 2 && !app.customLevelPackLoaded) {
+            items[2][4] = "Open Level Pack...";
+            items[2][5] = "Choose Level...";
+        }
+        const std::size_t count = static_cast<std::size_t>(topMenuItemCount(menu, app.customLevelPackLoaded));
         SDL_FRect drop{left[menu], kTopMenuDropTop, widths[menu], static_cast<float>(count) * kTopMenuRowHeight + 2.0F};
         setColor(app.renderer, kClassicMenu);
         SDL_RenderFillRect(app.renderer, &drop);
@@ -1794,7 +1798,9 @@ void draw(App& app) {
                 SDL_RenderFillRect(app.renderer, &selectedRow);
             }
             const bool separatorBefore = (menu == 0 && i == 3) ||
-                (menu == 1 && i == 3) || (menu == 2 && i == 4) || (menu == 3 && i == 4);
+                (menu == 1 && i == 3) ||
+                (menu == 2 && i == 4U) ||
+                (menu == 3 && i == 4);
             if (separatorBefore) {
                 setColor(app.renderer, SDL_Color{190, 190, 190, 255});
                 SDL_FRect separator{drop.x + 5.0F, rowY - 5.0F, drop.w - 10.0F, 1.0F};

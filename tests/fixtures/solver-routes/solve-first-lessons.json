@@ -1,0 +1,15 @@
+[
+  {
+    "level": 1,
+    "title": "LESSON 1",
+    "status": "solved",
+    "moves": 90,
+    "route": "EENNEEESNWWWSSSSWSSSSNNNNNWWWNNNNNWESSWWWSENEESSSSWWNWESEEESSSNNNEEEEEENSWWWNNNNNNEWSSWWNN",
+    "explored_states": 103754
+  },
+  {
+    "level": 2,
+    "title": "LESSON 2",
+    "status": "no_candidate"
+  }
+]

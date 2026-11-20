@@ -2053,7 +2053,7 @@ Each level always gets the input/timing protocol below. The feature actions are 
 - `tests/fixtures/README.md` documents eight native-winning routes; Level 2 has a 53-move original-played route with captured key-down timestamps and a recorded 18-tick initial phase. That phase is a fixture parameter, not a universal original startup value.
 - `tests/fixtures/level2-key-capture.json` and `scripts/replay_recorded_key_events.py` provide one reproducible physical-key timing case. Extend this method to all levels and input edge cases; do not treat a route win as proof of complete rules parity.
 - `tests/fixtures/native-known-routes.json` supplies routes for selected levels. They are useful scenario seeds, but only the Level 2 route is documented as played in the original executable; native route success alone is not an original/native comparison.
-- Consult `T:/ChipsChallenge/CHIPS.EXE-master/CHIPS.EXE-master/{movement.asm,logic.asm,constants.asm,seg2.asm}` for authoritative scheduling, movement eligibility, key routing and tile IDs. Use the original application for observations where the disassembly is ambiguous.
+- Consult `reference/CHIPS.EXE-master/CHIPS.EXE-master/{movement.asm,logic.asm,constants.asm,seg2.asm}` for authoritative scheduling, movement eligibility, key routing and tile IDs. Use the original application for observations where the disassembly is ambiguous.
 
 ## Completion rule
 

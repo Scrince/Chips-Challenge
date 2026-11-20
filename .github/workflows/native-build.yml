@@ -26,12 +26,12 @@ jobs:
         shell: pwsh
         run: >-
           ./scripts/build-windows.ps1
-          -BuildDirectory build
+          -BuildDirectory build/windows
           -Generator "Visual Studio 17 2022"
           -Architecture x64
           -Configuration Release
           -Package
-          -PackageDirectory dist
+          -PackageDirectory build/windows/packages
 
       - name: Install Linux SDL3 backend dependencies
         if: runner.os == 'Linux'
@@ -41,20 +41,20 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
             libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
             libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev \
-            libusb-1.0-0-dev \
+            libusb-1.0-0-dev libfluidsynth-dev fluid-soundfont-gm \
             libpipewire-0.3-dev libwayland-dev libdecor-0-dev
 
       - name: Configure (macOS and Linux)
         if: runner.os != 'Windows'
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build/${{ runner.os == 'Linux' && 'linux' || 'macos' }} -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         if: runner.os != 'Windows'
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build/${{ runner.os == 'Linux' && 'linux' || 'macos' }} --config Release --parallel
 
       - name: Stage relocatable application (macOS and Linux)
         if: runner.os != 'Windows'
-        run: cmake --install build --prefix "$GITHUB_WORKSPACE/stage"
+        run: cmake --install build/${{ runner.os == 'Linux' && 'linux' || 'macos' }} --prefix "$GITHUB_WORKSPACE/stage"
 
       - name: Validate staged application and original assets (macOS and Linux)
         if: runner.os != 'Windows'
@@ -71,12 +71,39 @@ jobs:
           "$GITHUB_WORKSPACE/stage/chips-native" --validate-digits "$GITHUB_WORKSPACE/stage/assets/art/digital-digits.png"
 
       - name: Test
-        run: ctest --test-dir build --build-config Release --output-on-failure
+        run: ctest --test-dir build/${{ runner.os == 'Windows' && 'windows' || (runner.os == 'Linux' && 'linux' || 'macos') }} --build-config Release --output-on-failure
 
       - name: Upload portable Windows package
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: chips-native-windows-x64-release
-          path: dist/chips-native-windows-x64-Release.zip
+          path: build/windows/packages/chips-native-windows-x64-Release.zip
+          if-no-files-found: error
+
+      - name: Package Linux release
+        if: runner.os == 'Linux'
+        run: ./scripts/build-linux-release.sh
+
+      - name: Upload Linux package
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chips-native-linux-x86_64-release
+          path: build/linux/packages/Chips-Challenge-*-Linux-*.tar.gz
+          if-no-files-found: error
+
+      - name: Package macOS releases
+        if: runner.os == 'macOS'
+        run: ./scripts/build-macos-release.sh
+
+      - name: Upload macOS packages
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chips-native-macos-releases
+          path: |
+            build/macos/Chips-Challenge-*-macOS-arm64.zip
+            build/macos/Chips-Challenge-*-macOS-x86_64.zip
+            build/macos/Chips-Challenge-*-macOS-universal.zip
           if-no-files-found: error

@@ -1,0 +1,915 @@
+[
+  {
+    "level": 1,
+    "title": "LESSON 1",
+    "status": "solved",
+    "reason": "search reached the 100,000 state limit",
+    "moves": 90,
+    "route": "EENNEEESNWWWSSSSWSSSSNNNNNWWWNNNNNWESSWWWSENEESSSSWWNWESEEESSSNNNEEEEEENSWWWNNNNNNEWSSWWNN",
+    "explored_states": 103754,
+    "retained_from": "results\\known-routes.json"
+  },
+  {
+    "level": 2,
+    "title": "LESSON 2",
+    "status": "solved",
+    "moves": 53,
+    "route": "EENSSWWWNWEENWWWWEESSWNENWWWWWNNNWWSWSSSSSSESNWNNWNWW",
+    "explored_states": 92126
+  },
+  {
+    "level": 3,
+    "title": "LESSON 3",
+    "status": "solved",
+    "moves": 60,
+    "route": "ESNNNNNWSSWWWSSNNEEEEEEESSSWWSSSWWEENEEEEENNNNNNNWWWNNNWWWNN",
+    "explored_states": 2349
+  },
+  {
+    "level": 4,
+    "title": "LESSON 4",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 5,
+    "title": "LESSON 5",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 6,
+    "title": "LESSON 6",
+    "status": "solved",
+    "moves": 35,
+    "route": "WWWNNNNWWWSSSSSWNNNENNEEESSSSEEESSS",
+    "explored_states": 3748
+  },
+  {
+    "level": 7,
+    "title": "LESSON 7",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 8,
+    "title": "LESSON 8",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 9,
+    "title": "NUTS AND BOLTS",
+    "status": "unsupported",
+    "reason": "bug interactions with sliding floors, teleports, traps, or buttons, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 10,
+    "title": "BRUSHFIRE",
+    "status": "solved",
+    "moves": 148,
+    "route": "SSSESEEENNNENEEEEEEEEEEESSSWWWNWWWWWWSWSSSSSSWSSSEEEEEEEENEEEEEEEESESESSSSSSSSEEEENNWNNNENNWNNNNNNEESESSSSSSSSSSSSSSSSWSWWWWNNWWWWWWWWWNWNNNNNENEEEE",
+    "explored_states": 1566
+  },
+  {
+    "level": 11,
+    "title": "TRINITY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, fireball interactions with sliding or special terrain, panel walls"
+  },
+  {
+    "level": 12,
+    "title": "HUNT",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 13,
+    "title": "SOUTHPOLE",
+    "status": "solved",
+    "moves": 7,
+    "route": "SSSSSSW",
+    "explored_states": 19
+  },
+  {
+    "level": 14,
+    "title": "TELEBLOCK",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 15,
+    "title": "ELEMENTARY",
+    "status": "unsupported",
+    "reason": "blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 16,
+    "title": "CELLBLOCKED",
+    "status": "unsupported",
+    "reason": "popup walls"
+  },
+  {
+    "level": 17,
+    "title": "NICE DAY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain"
+  },
+  {
+    "level": 18,
+    "title": "CASTLE MOAT",
+    "status": "unsupported",
+    "reason": "panel walls"
+  },
+  {
+    "level": 19,
+    "title": "DIGGER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 20,
+    "title": "TOSSED SALAD",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks already in motion, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 21,
+    "title": "ICEBERG",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 22,
+    "title": "FORCED ENTRY",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 23,
+    "title": "BLOBNET",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 24,
+    "title": "OORTO GELD",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 25,
+    "title": "BLINK",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 26,
+    "title": "CHCHCHIPS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 27,
+    "title": "GO WITH THE FLOW",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 28,
+    "title": "PING PONG",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 29,
+    "title": "ARCTICFLOW",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 30,
+    "title": "MISHMESH",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 31,
+    "title": "KNOT",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 32,
+    "title": "SCAVENGER HUNT",
+    "status": "unsupported",
+    "reason": "panel walls"
+  },
+  {
+    "level": 33,
+    "title": "ON THE ROCKS",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 34,
+    "title": "CYPHER",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 35,
+    "title": "LEMMINGS",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 36,
+    "title": "LADDER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 37,
+    "title": "SEEING STARS",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 38,
+    "title": "SAMPLER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 39,
+    "title": "GLUT",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 40,
+    "title": "FLOORGASBORG",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 41,
+    "title": "I.C. YOU",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 42,
+    "title": "BEWARE OF BUG",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 43,
+    "title": "LOCK BLOCK",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors, popup walls"
+  },
+  {
+    "level": 44,
+    "title": "REFRACTION",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 45,
+    "title": "MONSTER LAB",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 46,
+    "title": "THREE DOORS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 47,
+    "title": "PIER SEVEN",
+    "status": "unsupported",
+    "reason": "blocks sliding on ice or force floors"
+  },
+  {
+    "level": 48,
+    "title": "MUGGER SQUARE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 49,
+    "title": "PROBLEMS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 50,
+    "title": "DIGDIRT",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 51,
+    "title": "I SLIDE",
+    "status": "solved",
+    "moves": 31,
+    "route": "EEWENEESSWSNNWNSWESNWSNNESWENNE",
+    "explored_states": 48363
+  },
+  {
+    "level": 52,
+    "title": "THE LAST LAUGH",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 53,
+    "title": "TRAFFIC COP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 54,
+    "title": "GRAIL",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, blocks already in motion, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 55,
+    "title": "POTPOURRI",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 56,
+    "title": "DEEPFREEZE",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 57,
+    "title": "STRANGE MAZE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 58,
+    "title": "LOOP AROUND",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 59,
+    "title": "HIDDEN DANGER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 60,
+    "title": "SCOUNDREL",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 61,
+    "title": "RINK",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 62,
+    "title": "SLO MO",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain"
+  },
+  {
+    "level": 63,
+    "title": "BLOCK FACTORY",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 64,
+    "title": "SPOOKS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 65,
+    "title": "AMSTERDAM",
+    "status": "unsupported",
+    "reason": "blocks sliding on ice or force floors"
+  },
+  {
+    "level": 66,
+    "title": "VICTIM",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 67,
+    "title": "CHIPMINE",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 68,
+    "title": "EENY MINY MOE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 69,
+    "title": "BOUNCE CITY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 70,
+    "title": "NIGHTMARE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 71,
+    "title": "CORRIDOR",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 72,
+    "title": "REVERSE ALLEY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 73,
+    "title": "MORTON",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 74,
+    "title": "PLAYTIME",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 75,
+    "title": "STEAM",
+    "status": "solved",
+    "moves": 61,
+    "route": "NWSWWWNWWWSWWWNNWNNENNNNNNWNNNWWWWSSEWSNNNNWNNNNWWWWWWWWWWWWW",
+    "explored_states": 40153
+  },
+  {
+    "level": 76,
+    "title": "FOUR PLEX",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 77,
+    "title": "INVINCIBLE CHAMPION",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 78,
+    "title": "FORCE SQUARE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 79,
+    "title": "DRAWN AND QUARTERED",
+    "status": "unsupported",
+    "reason": "fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 80,
+    "title": "VANISHING ACT",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 81,
+    "title": "WRITERS BLOCK",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 82,
+    "title": "SOCIALIST ACTION",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 83,
+    "title": "UP THE BLOCK",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 84,
+    "title": "WARS",
+    "status": "unsupported",
+    "reason": "bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 85,
+    "title": "TELENET",
+    "status": "unsupported",
+    "reason": "fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 86,
+    "title": "SUICIDE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 87,
+    "title": "CITYBLOCK",
+    "status": "unsupported",
+    "reason": "blocks sliding on ice or force floors"
+  },
+  {
+    "level": 88,
+    "title": "SPIRALS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 89,
+    "title": "BLOCK BUSTER",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 90,
+    "title": "PLAYHOUSE",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 91,
+    "title": "JUMPING SWARM",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 92,
+    "title": "VORTEX",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 93,
+    "title": "ROADSIGN",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 94,
+    "title": "NOW YOU SEE IT",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 95,
+    "title": "FOUR SQUARE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 96,
+    "title": "PARANOIA",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 97,
+    "title": "METASTABLE TO CHAOS",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 98,
+    "title": "SHRINKING",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 99,
+    "title": "CATACOMBS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 100,
+    "title": "COLONY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 101,
+    "title": "APARTMENT",
+    "status": "unsupported",
+    "reason": "popup walls"
+  },
+  {
+    "level": 102,
+    "title": "ICEHOUSE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 103,
+    "title": "MEMORY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 104,
+    "title": "JAILER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 105,
+    "title": "SHORT CIRCUIT",
+    "status": "unsupported",
+    "reason": "popup walls"
+  },
+  {
+    "level": 106,
+    "title": "KABLAM",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 107,
+    "title": "BALLS O FIRE",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 108,
+    "title": "BLOCK OUT",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 109,
+    "title": "TORTURECHAMBER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 110,
+    "title": "CHILLER",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, blocks sliding on ice or force floors"
+  },
+  {
+    "level": 111,
+    "title": "TIME LAPSE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 112,
+    "title": "FORTUNE FAVOURS THE",
+    "status": "unsupported",
+    "reason": "bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 113,
+    "title": "OPEN QUESTION",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 114,
+    "title": "DECEPTION",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, popup walls"
+  },
+  {
+    "level": 115,
+    "title": "OVERSEA DELIVERY",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 116,
+    "title": "BLOCK BUSTER II",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors, panel walls"
+  },
+  {
+    "level": 117,
+    "title": "THE MARSH",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 118,
+    "title": "MISS DIRECTION",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 119,
+    "title": "SLIDE STEP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 120,
+    "title": "ALPHABET SOUP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks already in motion, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 121,
+    "title": "PERFECT MATCH",
+    "status": "unsupported",
+    "reason": "ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 122,
+    "title": "TOTALLY FAIR",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 123,
+    "title": "THE PRISONER",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 124,
+    "title": "FIRETRAP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 125,
+    "title": "MIXED NUTS",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 126,
+    "title": "BLOCK N ROLL",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, popup walls"
+  },
+  {
+    "level": 127,
+    "title": "SKELZIE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 128,
+    "title": "ALL FULL",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 129,
+    "title": "LOBSTER TRAP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 130,
+    "title": "ICE CUBE",
+    "status": "unsupported",
+    "reason": "bug interactions with sliding floors, teleports, traps, or buttons"
+  },
+  {
+    "level": 131,
+    "title": "TOTALLY UNFAIR",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 132,
+    "title": "MIX UP",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 133,
+    "title": "BLOBDANCE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 134,
+    "title": "PAIN",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 135,
+    "title": "TRUST ME",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 136,
+    "title": "DOUBLEMAZE",
+    "status": "unsupported",
+    "reason": "panel walls"
+  },
+  {
+    "level": 137,
+    "title": "GOLDKEY",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, panel walls, popup walls"
+  },
+  {
+    "level": 138,
+    "title": "PARTIAL POST",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 139,
+    "title": "YORKHOUSE",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 140,
+    "title": "ICEDEATH",
+    "status": "solved",
+    "moves": 36,
+    "route": "NENNESENESSSSSWWWSSSSWWWWWWWWWWSSWWW",
+    "explored_states": 589
+  },
+  {
+    "level": 141,
+    "title": "UNDERGROUND",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls"
+  },
+  {
+    "level": 142,
+    "title": "PENTAGRAM",
+    "status": "unsupported",
+    "reason": "panel walls, popup walls"
+  },
+  {
+    "level": 143,
+    "title": "STRIPES?",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 144,
+    "title": "FIREFLIES",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 145,
+    "title": "Thanks to...",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, bug interactions with sliding floors, teleports, traps, or buttons, ball interactions with sliding or special terrain, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 146,
+    "title": "CAKE WALK",
+    "status": "unsupported",
+    "reason": "creature types beyond modeled bugs, fireballs, and balls, ball interactions with sliding or special terrain, fireball interactions with sliding or special terrain, blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors, popup walls"
+  },
+  {
+    "level": 147,
+    "title": "FORCE FIELD",
+    "status": "no_candidate"
+  },
+  {
+    "level": 148,
+    "title": "MIND BLOCK",
+    "status": "unsupported",
+    "reason": "blocks already in motion, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 149,
+    "title": "SPECIAL",
+    "status": "unsupported",
+    "reason": "blocks sliding on ice or force floors, teleports, traps, cloning, tank controls, or random force floors"
+  }
+]

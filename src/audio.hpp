@@ -9,6 +9,8 @@
 
 #ifdef __APPLE__
 #include <AudioToolbox/AudioToolbox.h>
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+#include <fluidsynth.h>
 #endif
 
 namespace chips {
@@ -62,6 +64,17 @@ private:
     AUGraph musicGraph_{};
     AudioUnit musicSynth_{};
     MusicTimeStamp midiTrackLengthBeats_{};
+    bool midiOpen_{};
+    bool midiPlaying_{};
+#elif defined(__linux__) && defined(CHIPS_HAVE_FLUIDSYNTH)
+    fluid_settings_t* midiSettings_{};
+    fluid_synth_t* midiSynth_{};
+    fluid_player_t* midiPlayer_{};
+    fluid_audio_driver_t* midiAudioDriver_{};
+    int midiSoundFontId_{-1};
+    bool midiOpen_{};
+    bool midiPlaying_{};
+#elif defined(__EMSCRIPTEN__)
     bool midiOpen_{};
     bool midiPlaying_{};
 #endif

@@ -1,5 +1,5 @@
 param(
-    [string]$BuildDirectory = "build-windows",
+    [string]$BuildDirectory = "build/windows",
     [string]$Generator = "Visual Studio 17 2022",
     [string]$Architecture = "x64",
     [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
@@ -8,7 +8,7 @@ param(
     [int]$BuildParallelism = 4,
     [switch]$Launch,
     [switch]$Package,
-    [string]$PackageDirectory = "dist"
+    [string]$PackageDirectory = "build/windows/packages"
 )
 
 $ErrorActionPreference = "Stop"
@@ -102,7 +102,8 @@ if ($Package) {
     New-Item -ItemType Directory -Path $StagePath | Out-Null
     Copy-Item -LiteralPath $Executable -Destination $StagePath
     Get-ChildItem -LiteralPath (Split-Path $Executable) -Filter "*.dll" -File | Copy-Item -Destination $StagePath
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "data\CHIPS.DAT") -Destination (New-Item -ItemType Directory -Path (Join-Path $StagePath "data") -Force).FullName
+    $StagedDataDirectory = New-Item -ItemType Directory -Path (Join-Path $StagePath "data") -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "data\CHIPS.DAT") -Destination $StagedDataDirectory.FullName
     $SourceAssetManifest = Join-Path $ProjectRoot "assets\ASSET_MANIFEST.json"
     try {
         $ManifestData = Get-Content -LiteralPath $SourceAssetManifest -Raw | ConvertFrom-Json
@@ -118,6 +119,33 @@ if ($Package) {
     $StagedAssetsRoot = Join-Path $StagePath "assets"
     New-Item -ItemType Directory -Path $StagedAssetsRoot -Force | Out-Null
     Copy-Item -LiteralPath $SourceAssetManifest -Destination $StagedAssetsRoot
+    $StagedHelpDirectory = Join-Path $StagedAssetsRoot "help"
+    New-Item -ItemType Directory -Path $StagedHelpDirectory -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\help\chips-help.html") `
+        -Destination $StagedHelpDirectory
+    $SourceAudioDirectory = Join-Path $ProjectRoot "assets\audio"
+    $StagedAudioDirectory = Join-Path $StagedAssetsRoot "audio"
+    if (-not (Test-Path -LiteralPath $SourceAudioDirectory -PathType Container)) {
+        throw "The source audio directory is missing: $SourceAudioDirectory"
+    }
+    $SourceAudioFiles = @(Get-ChildItem -LiteralPath $SourceAudioDirectory -File -Recurse)
+    if ($SourceAudioFiles.Count -eq 0) {
+        throw "The source audio directory contains no files: $SourceAudioDirectory"
+    }
+    New-Item -ItemType Directory -Path $StagedAudioDirectory -Force | Out-Null
+    foreach ($AudioFile in $SourceAudioFiles) {
+        $RelativeAudioPath = [regex]::Replace(
+            $AudioFile.FullName.Substring($SourceAudioDirectory.Length), '^[\\/]+', '')
+        $StagedAudio = Join-Path $StagedAudioDirectory $RelativeAudioPath
+        $StagedAudioParent = Split-Path -Parent $StagedAudio
+        New-Item -ItemType Directory -Path $StagedAudioParent -Force | Out-Null
+        Copy-Item -LiteralPath $AudioFile.FullName -Destination $StagedAudio
+        $SourceAudioHash = (Get-FileHash -LiteralPath $AudioFile.FullName -Algorithm SHA256).Hash
+        $StagedAudioHash = (Get-FileHash -LiteralPath $StagedAudio -Algorithm SHA256).Hash
+        if ($StagedAudioHash -ne $SourceAudioHash) {
+            throw "Staged audio differs from the source file: $RelativeAudioPath"
+        }
+    }
     foreach ($AssetRecord in $ManifestData.assets) {
         if ([string]::IsNullOrWhiteSpace($AssetRecord.path)) {
             throw "Original-art asset manifest contains a record without a path."
@@ -137,16 +165,26 @@ if ($Package) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\ART.md") -Destination $StagedAssetsRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "assets\AUDIO.md") -Destination $StagedAssetsRoot
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "README.md") -Destination $StagePath
-    $HelpSource = Join-Path $ProjectRoot "assets\help\chips-help.html"
-    if (-not (Test-Path -LiteralPath $HelpSource -PathType Leaf)) {
-        throw "Portable HTML help manual is missing: $HelpSource"
-    }
-    $HelpStageDirectory = Join-Path $StagedAssetsRoot "help"
-    New-Item -ItemType Directory -Path $HelpStageDirectory -Force | Out-Null
-    Copy-Item -LiteralPath $HelpSource -Destination $HelpStageDirectory
-    $ChangelogSource = Join-Path $ProjectRoot "CHANGELOG.md"
-    if (Test-Path -LiteralPath $ChangelogSource -PathType Leaf) {
-        Copy-Item -LiteralPath $ChangelogSource -Destination $StagePath
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "CHANGELOG.md") -Destination $StagePath
+    $VersionMatch = [regex]::Match((Get-Content -LiteralPath (Join-Path $ProjectRoot "CMakeLists.txt") -Raw),
+        '(?m)^project\(ChipsChallengeNative VERSION ([0-9]+\.[0-9]+\.[0-9]+)')
+    if (-not $VersionMatch.Success) { throw "Could not determine the project version from CMakeLists.txt." }
+    $ProjectVersion = $VersionMatch.Groups[1].Value
+    Set-Content -LiteralPath (Join-Path $StagePath "VERSION.txt") -Value $ProjectVersion -Encoding ascii
+    @"
+Chip's Challenge Native $ProjectVersion — Windows x64
+
+This is a portable Windows package. Extract the complete folder and run
+chips-native.exe. Keep assets, data, and the included DLL files beside it.
+
+The bundled Help menu opens the offline help manual at the selected section.
+Third-party license terms are in ThirdPartyNotices.txt.
+This package is unsigned; its SHA-256 checksum is recorded beside the ZIP.
+"@ | Set-Content -LiteralPath (Join-Path $StagePath "README.txt") -Encoding utf8
+    $BundledCclp2Files = @(Get-ChildItem -LiteralPath $StagePath -Recurse -File |
+        Where-Object { $_.Name -ieq "CCLP2.DAT" -or $_.Name -ieq "CCLP2-disclaimer.txt" })
+    if ($BundledCclp2Files.Count -gt 0) {
+        throw "CCLP2 files are not permitted in the Windows release package: $($BundledCclp2Files.FullName -join ', ')"
     }
     $AssetManifest = Join-Path $StagePath "assets\ASSET_MANIFEST.json"
     if (-not (Test-Path -LiteralPath $AssetManifest -PathType Leaf)) {

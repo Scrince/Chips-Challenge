@@ -11,7 +11,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT.parent / "CHIPS.EXE-master" / "CHIPS.EXE-master"
+SOURCE = ROOT / "reference" / "CHIPS.EXE-master" / "CHIPS.EXE-master"
 RESOURCE = SOURCE / "res"
 OUT = ROOT / "assets" / "art"
 MANIFEST = ROOT / "assets" / "ASSET_MANIFEST.json"
@@ -217,7 +217,7 @@ def main() -> None:
             "format": asset_format,
             "provenance": description,
             "source": ("assets/" + reference if reference.startswith("art/app-icon")
-                else "CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp"),
+                else "reference/CHIPS.EXE-master/CHIPS.EXE-master/res/OBJ32_4.bmp"),
             "source_sha256": sha256(ROOT / "assets" / reference) if reference.startswith("art/app-icon") else sha256(tile_source),
             "reference": f"assets/{reference}",
             "sha256": sha256(asset_path),

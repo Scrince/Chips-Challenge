@@ -6,3 +6,6 @@ __pycache__/
 *.py[cod]
 *.user
 *.suo
+.gnupg-release/
+._*
+.DS_Store

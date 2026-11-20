@@ -1,0 +1,56 @@
+[
+  {
+    "level": 1,
+    "title": "LESSON 1",
+    "status": "solved",
+    "reason": "search reached the 100,000 state limit",
+    "moves": 90,
+    "route": "EENNEEESNWWWSSSSWSSSSNNNNNWWWNNNNNWESSWWWSENEESSSSWWNWESEEESSSNNNEEEEEENSWWWNNNNNNEWSSWWNN",
+    "explored_states": 103754,
+    "retained_from": "T:\\ChipsChallenge\\cc-speedrun\\results\\known-routes.json"
+  },
+  {
+    "level": 2,
+    "title": "LESSON 2",
+    "status": "state_limit",
+    "reason": "search reached the 100,000 state limit"
+  },
+  {
+    "level": 3,
+    "title": "LESSON 3",
+    "status": "unsupported",
+    "reason": "panel walls, ice corners, or popup walls"
+  },
+  {
+    "level": 4,
+    "title": "LESSON 4",
+    "status": "unsupported",
+    "reason": "creature types beyond deterministic bugs, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 5,
+    "title": "LESSON 5",
+    "status": "unsupported",
+    "reason": "creature types beyond deterministic bugs, teleports, traps, cloning, tank controls, or random force floors"
+  },
+  {
+    "level": 6,
+    "title": "LESSON 6",
+    "status": "solved",
+    "moves": 35,
+    "route": "WWWNNNNWWWSSSSSWNNNENNEEESSSSEEESSS",
+    "explored_states": 3748
+  },
+  {
+    "level": 7,
+    "title": "LESSON 7",
+    "status": "unsupported",
+    "reason": "teleports, traps, cloning, tank controls, or random force floors, panel walls, ice corners, or popup walls"
+  },
+  {
+    "level": 8,
+    "title": "LESSON 8",
+    "status": "unsupported",
+    "reason": "creature types beyond deterministic bugs"
+  }
+]
