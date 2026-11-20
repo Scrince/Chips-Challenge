@@ -1,0 +1,79 @@
+name: WebAssembly build and browser smoke
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webassembly:
+    name: Build and smoke-test WebAssembly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+
+      - uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+        with:
+          version: 5.0.3
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Configure WebAssembly build
+        run: emcmake cmake -S . -B build/webassembly-ci -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build WebAssembly game
+        run: cmake --build build/webassembly-ci --target chips-native --parallel 2
+
+      - name: Check packaged runtime and audio
+        run: |
+          python3 tests/webassembly_build_test.py build/webassembly-ci
+          node --check build/webassembly-ci/midi-player.js
+          node --check build/webassembly-ci/soundfont-midi.js
+          node tests/webassembly_audio_test.js
+
+      - name: Install Playwright browsers
+        run: |
+          npm install --no-save --package-lock=false playwright@1.65.1
+          npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run browser smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --directory build/webassembly-ci >"$RUNNER_TEMP/wasm-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/chips-native.html >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8765/chips-native.html >/dev/null
+          CHIPS_WEB_URL=http://127.0.0.1:8765/chips-native.html \
+          CHIPS_LEVEL_PACK="$GITHUB_WORKSPACE/data/CHIPS.DAT" \
+          CHIPS_EXPECT_PACK_TITLE="LESSON 1" \
+          CHIPS_BROWSERS="Chromium,Firefox,WebKit" \
+          SMOKE_ARTIFACT_DIR="$RUNNER_TEMP/wasm-smoke" \
+            node tests/webassembly_browser_smoke.cjs
+
+      - name: Upload browser failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: webassembly-browser-smoke-screenshots
+          path: ${{ runner.temp }}/wasm-smoke/
+          if-no-files-found: ignore

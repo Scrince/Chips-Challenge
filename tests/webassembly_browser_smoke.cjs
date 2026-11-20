@@ -6,6 +6,7 @@ const { chromium, firefox, webkit } = require("playwright");
 
 const url = process.env.CHIPS_WEB_URL || "http://host.docker.internal:8765/chips-native.html";
 const levelPack = process.env.CHIPS_LEVEL_PACK || "/testdata/CCLP1.dat";
+const expectedPackTitle = process.env.CHIPS_EXPECT_PACK_TITLE || "Key Pyramid";
 const viewport = { width: 1280, height: 820 };
 
 async function runBrowser(name, browserType) {
@@ -110,7 +111,11 @@ async function runBrowser(name, browserType) {
     }
     const chooser = await chooserPromise;
     await chooser.setFiles(levelPack);
-    await page.waitForFunction(() => document.title.includes("Key Pyramid"), null, { timeout: 30000 });
+    await page.waitForFunction(
+      (expectedTitle) => document.title.includes(expectedTitle),
+      expectedPackTitle,
+      { timeout: 30000 },
+    );
 
     assert.deepEqual(pageErrors, [], `${name}: uncaught browser exceptions`);
     assert.deepEqual(failedRequests, [], `${name}: failed asset requests`);
