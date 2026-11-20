@@ -1,0 +1,2 @@
+# Runtime assets are hash-checked and must keep identical bytes on every OS.
+assets/** -text
