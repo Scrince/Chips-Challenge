@@ -226,6 +226,9 @@ target_compile_definitions(chips-engine-tests PRIVATE
 target_compile_features(chips-engine-tests PRIVATE cxx_std_20)
 if(MSVC)
     target_compile_options(chips-engine-tests PRIVATE /W4 /permissive-)
+    # engine_tests.cpp keeps the regression cases in one function, creating a
+    # large MSVC stack frame that exceeds the Windows 1 MiB executable default.
+    target_link_options(chips-engine-tests PRIVATE /STACK:8388608)
 else()
     target_compile_options(chips-engine-tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
